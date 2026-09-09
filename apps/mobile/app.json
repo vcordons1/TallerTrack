@@ -1,6 +1,11 @@
 {
   "expo": {
     "name": "TallerTrack",
-    "slug": "tallertrack"
+    "slug": "tallertrack",
+    "scheme": "tallertrack",
+    "plugins": [
+      "expo-router",
+      "expo-status-bar"
+    ]
   }
 }

@@ -1,15 +1,23 @@
 {
   "name": "@tallertrack/mobile",
   "private": true,
-  "main": "index.js",
+  "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
-    "ios": "expo start --ios"
+    "ios": "expo start --ios",
+    "test": "node --test test/navigation.test.cjs test/session.test.cjs"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
     "expo": "57.0.21",
+    "expo-constants": "~57.0.17",
+    "expo-linking": "~57.0.9",
+    "expo-router": "~57.0.20",
+    "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
-    "react-native": "0.86.3"
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0"
   }
 }

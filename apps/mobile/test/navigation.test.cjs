@@ -1,0 +1,49 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+
+const {
+  CAPABILITIES,
+  ROLES,
+  deriveInternalCapabilities,
+  getAuthenticatedRoot,
+  getInternalDestinations,
+} = require("../src/navigation/accessPolicy");
+
+test("an administrator does not inherit operational workspaces", () => {
+  const capabilities = deriveInternalCapabilities([ROLES.ADMINISTRADOR]);
+
+  assert.equal(capabilities.has(CAPABILITIES.ADMIN_DASHBOARD), true);
+  assert.equal(capabilities.has(CAPABILITIES.AGENDA_WORKSPACE), true);
+  assert.equal(capabilities.has(CAPABILITIES.MANAGEMENT_WORKSPACE), true);
+  assert.equal(capabilities.has(CAPABILITIES.ORDERS_WORKSPACE), false);
+  assert.equal(capabilities.has(CAPABILITIES.INVENTORY_WORKSPACE), false);
+});
+
+test("multiple internal roles compose their destinations", () => {
+  const destinations = getInternalDestinations([
+    ROLES.RECEPCIONISTA,
+    ROLES.INVENTARIO,
+  ]).map(({ key }) => key);
+
+  assert.deepEqual(destinations, [
+    "home",
+    "orders",
+    "agenda",
+    "inventory",
+    "management",
+  ]);
+});
+
+test("a mechanic only receives home and orders", () => {
+  const destinations = getInternalDestinations([ROLES.MECANICO]).map(
+    ({ key }) => key,
+  );
+
+  assert.deepEqual(destinations, ["home", "orders"]);
+});
+
+test("authenticated actor type selects a separate shell", () => {
+  assert.equal(getAuthenticatedRoot({ tipoActor: "INTERNO" }), "/interno");
+  assert.equal(getAuthenticatedRoot({ tipoActor: "CLIENTE" }), "/cliente");
+  assert.equal(getAuthenticatedRoot(null), "/acceso/iniciar-sesion");
+});
