@@ -1,1 +1,15 @@
 .codex/task-handoff.md
+
+node_modules/
+
+.env
+.env.*
+!.env.example
+
+.expo/
+coverage/
+dist/
+build/
+
+*.log
+npm-debug.log*
