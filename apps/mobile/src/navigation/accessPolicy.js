@@ -101,6 +101,10 @@ function getInternalDestinations(roles = []) {
   );
 }
 
+function hasInternalCapability(roles = [], capability) {
+  return deriveInternalCapabilities(roles).has(capability);
+}
+
 function canAccessInternalDestination(roles, destinationKey) {
   return getInternalDestinations(roles).some(
     ({ key }) => key === destinationKey,
@@ -128,4 +132,5 @@ module.exports = {
   deriveInternalCapabilities,
   getAuthenticatedRoot,
   getInternalDestinations,
+  hasInternalCapability,
 };

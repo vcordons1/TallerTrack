@@ -7,6 +7,7 @@ const {
   deriveInternalCapabilities,
   getAuthenticatedRoot,
   getInternalDestinations,
+  hasInternalCapability,
 } = require("../src/navigation/accessPolicy");
 
 test("an administrator does not inherit operational workspaces", () => {
@@ -17,6 +18,25 @@ test("an administrator does not inherit operational workspaces", () => {
   assert.equal(capabilities.has(CAPABILITIES.MANAGEMENT_WORKSPACE), true);
   assert.equal(capabilities.has(CAPABILITIES.ORDERS_WORKSPACE), false);
   assert.equal(capabilities.has(CAPABILITIES.INVENTORY_WORKSPACE), false);
+});
+
+test("the administrative Dashboard is isolated from non-administrator actors", () => {
+  assert.equal(
+    hasInternalCapability([ROLES.ADMINISTRADOR], CAPABILITIES.ADMIN_DASHBOARD),
+    true,
+  );
+  assert.equal(
+    hasInternalCapability([ROLES.RECEPCIONISTA], CAPABILITIES.ADMIN_DASHBOARD),
+    false,
+  );
+  assert.equal(
+    hasInternalCapability([ROLES.MECANICO], CAPABILITIES.ADMIN_DASHBOARD),
+    false,
+  );
+  assert.equal(
+    hasInternalCapability([ROLES.INVENTARIO], CAPABILITIES.ADMIN_DASHBOARD),
+    false,
+  );
 });
 
 test("multiple internal roles compose their destinations", () => {
