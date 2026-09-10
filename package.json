@@ -15,7 +15,8 @@
     "db:validate": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/scripts/invoke-flyway.ps1 validate",
     "test:db:foundation": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/tests/foundation.integration.ps1",
     "test:db:i02": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/tests/i02.integration.ps1",
-    "test:db:integration": "npm.cmd run test:db:foundation && npm.cmd run test:db:i02",
+    "test:db:i03": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/tests/i03.integration.ps1",
+    "test:db:integration": "npm.cmd run test:db:foundation && npm.cmd run test:db:i02 && npm.cmd run test:db:i03",
     "test:api:oracle": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File apps/api/test/oracle.integration.ps1"
   },
   "packageManager": "npm@11.13.0"

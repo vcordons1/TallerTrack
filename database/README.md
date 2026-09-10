@@ -7,7 +7,7 @@ The repository bootstrap downloads the official Windows distribution from Redgat
 ## Accounts and least privilege
 
 - `TT_OWNER` is the deployment identity. I02 needs `CREATE SESSION`, `CREATE TABLE`, `CREATE SEQUENCE`, `CREATE VIEW`, `CREATE PROCEDURE`, and a bounded quota. Later increments must add only the object-creation privileges required by their reviewed migrations.
-- `TT_APP` is the application runtime identity. It has no quota, DDL, or direct DML. It receives `CREATE SESSION`, `SELECT` on the three readiness objects (`flyway_schema_history`, `CONFIG_TALLER`, and `ROL`), and `EXECUTE` on the complete I02 facade `PKG_VEHICULOS`.
+- `TT_APP` is the application runtime identity. It has no quota, DDL, or direct DML. It receives `CREATE SESSION`, `SELECT` on the three readiness objects (`flyway_schema_history`, `CONFIG_TALLER`, and `ROL`), and `EXECUTE` only on the complete facades `PKG_VEHICULOS` and `PKG_AGENDA`.
 - `TT_QR_READ` is likewise deferred until the public QR read path and its views exist.
 
 For a local development owner, connect to `XEPDB1` as an authorized Oracle administrator, choose the password outside the repository, and execute the equivalent of:
@@ -28,7 +28,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/scripts/bootstr
 
 The bootstrap does not run if `TT_OWNER` already exists. Account lifecycle and password rotation remain administrative operations outside application startup.
 
-After `TT_OWNER` has V001–V008 applied, establish the runtime user through the separate administrator bootstrap. It refuses to replace an existing account, validates the owner objects before creating anything, accepts the password as a `SecureString`, verifies the exact privilege set, and removes a partially configured new account if verification fails:
+After `TT_OWNER` has V001–V011 applied, establish the runtime user through the separate administrator bootstrap. It refuses to replace an existing account, validates the owner objects before creating anything, accepts the password as a `SecureString`, verifies the exact privilege set, and removes a partially configured new account if verification fails:
 
 ```powershell
 $runtimePassword = Read-Host 'New TT_APP password' -AsSecureString
@@ -79,7 +79,7 @@ ORDER BY "installed_rank";
 - `database/scripts/` contains tooling/bootstrap scripts, not a custom migration engine.
 - As later increments require them, add maintainable current sources under `database/tables/`, `constraints/`, `indexes/`, `views/`, `packages/`, `grants/`, and `seeds/`; create each directory only with its first real artifact. Publish every source change through a new migration. Keep database test fixtures under tests, not production seeds.
 
-V001 remains the immutable TT-011 technical baseline. I01 uses V002–V004. I02 uses V005 for its four tables and local constraints, V006 for relationships, indexes and `V_PROPIETARIO_ACTUAL`, V007 for the five vehicle-type seeds, and V008 for the transaction facade `PKG_VEHICULOS`. The canonical audit table is `AUDITORIA_EVENTO`; there is no shortened `AUDITORIA` table. Runtime grants are applied by the explicit bootstrap, not a migration.
+V001 remains the immutable TT-011 technical baseline. I01 uses V002–V004. I02 uses V005 for its four tables and local constraints, V006 for relationships, indexes and `V_PROPIETARIO_ACTUAL`, V007 for the five vehicle-type seeds, and V008 for `PKG_VEHICULOS`. I03 uses V009 for agenda/order tables, V010 for their relationships and conditional indexes, and V011 for the complete `PKG_AGENDA` transaction facade. `ARCHIVO_PRIVADO`, `EVIDENCIA`, and the T01 order-opening package remain deferred because G-03/G-07 are open. The canonical audit table is `AUDITORIA_EVENTO`; there is no shortened `AUDITORIA` table. Runtime grants are applied by the explicit bootstrap, not a migration.
 
 ## Integration test
 
@@ -89,7 +89,7 @@ With local Oracle XE 21c running and local OS authentication available to `sqlpl
 npm.cmd run test:db:integration
 ```
 
-The aggregate test runs the foundation and I02 suites. Foundation uses two uniquely named `TT_TEST_*` schemas and verifies a clean V001–V008 migration, upgrade from V001, second no-op migration, Flyway info/validate, immutable checksums, I01 structure and negative cases. I02 uses a separate owner/runtime pair and verifies exact vehicle seeds and physical types, constraints/indexes, package atomicity and replay, negative cases, runtime grants, and forced races with independent Oracle sessions. Every guarded schema is dropped in `finally`.
+The aggregate test runs the foundation, I02, and I03 suites. Foundation uses two uniquely named `TT_TEST_*` schemas and verifies a clean V001–V011 migration, upgrade from V001, second no-op migration, Flyway info/validate, immutable checksums, I01 structure and negative cases. I02 verifies its vehicle/property/QR behavior against the current schema. I03 verifies upgrade from V008, appointments and immutable events, order ownership/cita/active invariants, historical mechanic participation, least privilege, and a forced active-order race with independent Oracle sessions. Every guarded schema is dropped in `finally`.
 
 TT-013 adds a separate real API integration test. It creates a unique migrated owner and an ephemeral literal `TT_APP`, verifies its exact grants and denied DDL/DML, exercises Express through node-oracledb Thin mode, checks a real incorrect credential, and removes both accounts in `finally`:
 
