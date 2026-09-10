@@ -1,3 +1,4 @@
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { StyleSheet, Text, View } from "react-native";
 
 import { ProductHeader } from "./ProductHeader";
@@ -23,6 +24,17 @@ export function PlaceholderScreen({
         </View>
       )}
       {children ? <View style={styles.content}>{children}</View> : null}
+      {productShell && !children ? (
+        <View accessible accessibilityLabel={`${title}. Sección disponible más adelante.`} style={styles.placeholderCard}>
+          <View accessible={false} style={styles.placeholderIcon}>
+            <MaterialCommunityIcons color={colors.primary} name="clock-outline" size={24} />
+          </View>
+          <Text style={styles.placeholderTitle}>Sección disponible más adelante</Text>
+          <Text style={styles.placeholderDescription}>
+            Esta vista forma parte del recorrido previsto, pero todavía no ofrece acciones.
+          </Text>
+        </View>
+      ) : null}
     </ScreenContainer>
   );
 }
@@ -60,6 +72,35 @@ const styles = StyleSheet.create({
   },
   content: {
     marginTop: spacing.xxl,
+  },
+  placeholderCard: {
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.xxl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xxl,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surface,
+  },
+  placeholderIcon: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.xs,
+    borderRadius: radii.md,
+    backgroundColor: colors.primarySurface,
+  },
+  placeholderTitle: {
+    ...typography.bodyStrong,
+    color: colors.textPrimary,
+    textAlign: "center",
+  },
+  placeholderDescription: {
+    ...typography.supporting,
+    maxWidth: 360,
+    color: colors.textSecondary,
+    textAlign: "center",
   },
   card: {
     gap: spacing.md,

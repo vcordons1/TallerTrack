@@ -68,6 +68,5 @@ const styles = StyleSheet.create({
   context: {
     ...typography.supporting,
     color: colors.textSecondary,
-    textTransform: "capitalize",
   },
 });

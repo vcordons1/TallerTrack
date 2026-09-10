@@ -39,7 +39,7 @@ const ORDER_STATUS_PRESENTATION = Object.freeze({
   EN_REPARACION: { label: "En reparación", tone: "info", icon: "tools" },
   LISTO_PARA_ENTREGA: { label: "Lista para entrega", tone: "success", icon: "check-circle-outline" },
   PENDIENTE_ENTREGA_SIN_REPARACION: { label: "Entrega sin reparación", tone: "warning", icon: "car-arrow-right" },
-  ENTREGADO: { label: "Entregada", tone: "success", icon: "car-check" },
+  ENTREGADO: { label: "Entregada", tone: "success", icon: "check-decagram-outline" },
   ENTREGADO_SIN_REPARACION: { label: "Entregada sin reparación", tone: "neutral", icon: "car-outline" },
   CANCELADO: { label: "Cancelada", tone: "danger", icon: "close-circle-outline" },
 });
