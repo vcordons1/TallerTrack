@@ -41,7 +41,7 @@ create user $SchemaName identified by "$plainPassword"
   default tablespace USERS
   temporary tablespace TEMP
   quota 20M on USERS;
-grant create session, create table, create sequence to $SchemaName;
+grant create session, create table, create sequence, create procedure, create view to $SchemaName;
 exit
 "@
 
@@ -56,7 +56,7 @@ exit
         throw 'Oracle bootstrap output contained sensitive material; output suppressed.'
     }
 
-    Write-Output "Schema $SchemaName created with CREATE SEQUENCE, CREATE SESSION, CREATE TABLE, and a 20 MiB USERS quota."
+    Write-Output "Schema $SchemaName created with CREATE PROCEDURE, CREATE SEQUENCE, CREATE SESSION, CREATE TABLE, CREATE VIEW, and a 20 MiB USERS quota."
 }
 finally {
     $plainPassword = $null
