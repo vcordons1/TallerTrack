@@ -1,7 +1,8 @@
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Link } from "expo-router";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 
-import { colors, spacing, typography } from "../theme/tokens";
+import { colors, radii } from "../theme/tokens";
 
 export function AccountHeaderAction({ href }) {
   return (
@@ -12,7 +13,12 @@ export function AccountHeaderAction({ href }) {
         hitSlop={4}
         style={({ pressed }) => [styles.button, pressed && styles.pressed]}
       >
-        <Text style={styles.label}>Cuenta</Text>
+        <MaterialCommunityIcons
+          accessible={false}
+          color={colors.primary}
+          name="account-outline"
+          size={24}
+        />
       </Pressable>
     </Link>
   );
@@ -20,18 +26,14 @@ export function AccountHeaderAction({ href }) {
 
 const styles = StyleSheet.create({
   button: {
-    minWidth: 64,
+    width: 48,
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: spacing.sm,
-    paddingHorizontal: spacing.sm,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primarySurface,
   },
   pressed: {
-    opacity: 0.65,
-  },
-  label: {
-    ...typography.label,
-    color: colors.primary,
+    backgroundColor: colors.surfaceMuted,
   },
 });

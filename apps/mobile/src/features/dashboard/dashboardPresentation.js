@@ -23,6 +23,14 @@ const ACTIVITY_TYPE_LABELS = Object.freeze({
   GARANTIA: "Garantía",
 });
 
+const ACTIVITY_ACTION_LABELS = Object.freeze({
+  VEHICULO_LISTO: "Vehículo listo",
+  VEHICULO_ENTREGADO: "Vehículo entregado",
+  PAGO_REGISTRADO: "Pago registrado",
+  RESERVA_CONFIRMADA: "Reserva confirmada",
+  COBERTURA_ACEPTADA: "Cobertura aceptada",
+});
+
 function getOrderCount(actual, estado) {
   return (
     actual.ordenesPorEstado.find((item) => item.estado === estado)?.cantidad ?? 0
@@ -76,6 +84,7 @@ function formatActivityTime(instant, timeZone) {
 
 module.exports = {
   ACTIVE_ORDER_STATES,
+  ACTIVITY_ACTION_LABELS,
   ACTIVITY_TYPE_LABELS,
   ORDER_STATE_LABELS,
   formatActivityTime,

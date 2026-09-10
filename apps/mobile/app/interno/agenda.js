@@ -5,9 +5,9 @@ export default function InternalAgendaScreen() {
   return (
     <CapabilityBoundary destination="agenda">
       <PlaceholderScreen
-        eyebrow="Espacio interno"
         title="Agenda"
-        description="Base reservada para citas y solicitudes del personal autorizado."
+        description="Citas y solicitudes estarán disponibles en una próxima etapa."
+        productShell
       />
     </CapabilityBoundary>
   );

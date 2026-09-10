@@ -19,14 +19,14 @@ export default function InternalHomeScreen() {
     .map(({ title }) => title);
 
   if (hasInternalCapability(access.roles, CAPABILITIES.ADMIN_DASHBOARD)) {
-    return <DashboardScreen />;
+    return <DashboardScreen userName={access.nombreMostrado} />;
   }
 
   return (
     <PlaceholderScreen
-      eyebrow="Espacio interno"
       title={`Hola, ${access.nombreMostrado}`}
-      description="El inicio y los destinos visibles se componen con las capacidades vigentes de esta identidad."
+      description="Tu espacio de trabajo muestra únicamente los destinos disponibles para esta identidad."
+      productShell
     >
       <CapabilitySummary items={items.length > 0 ? items : ["Inicio interno"]} />
     </PlaceholderScreen>

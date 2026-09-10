@@ -5,9 +5,9 @@ export default function InternalManagementScreen() {
   return (
     <CapabilityBoundary destination="management">
       <PlaceholderScreen
-        eyebrow="Espacio interno"
         title="Gestión"
-        description="Base reservada para clientes y vehículos; la administración de usuarios requiere capacidad administrativa."
+        description="Clientes, vehículos y usuarios estarán disponibles en una próxima etapa."
+        productShell
       />
     </CapabilityBoundary>
   );

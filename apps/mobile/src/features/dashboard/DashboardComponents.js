@@ -4,26 +4,11 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radii, spacing, typography } from "../../theme/tokens";
 
 const TONES = Object.freeze({
-  neutral: {
-    foreground: colors.textPrimary,
-    surface: colors.surface,
-  },
-  info: {
-    foreground: colors.informational,
-    surface: colors.informationalSurface,
-  },
-  success: {
-    foreground: colors.success,
-    surface: colors.successSurface,
-  },
-  warning: {
-    foreground: colors.warning,
-    surface: colors.warningSurface,
-  },
-  danger: {
-    foreground: colors.danger,
-    surface: colors.dangerSurface,
-  },
+  neutral: { foreground: colors.textPrimary, surface: colors.surfaceMuted },
+  info: { foreground: colors.informational, surface: colors.informationalSurface },
+  success: { foreground: colors.success, surface: colors.successSurface },
+  warning: { foreground: colors.warning, surface: colors.warningSurface },
+  danger: { foreground: colors.danger, surface: colors.dangerSurface },
 });
 
 const ACTIVITY_ICONS = Object.freeze({
@@ -33,26 +18,25 @@ const ACTIVITY_ICONS = Object.freeze({
   GARANTIA: "shield-check-outline",
 });
 
+const ACTIVITY_TONES = Object.freeze({
+  ORDEN: "info",
+  PAGO: "success",
+  INVENTARIO: "warning",
+  GARANTIA: "success",
+});
+
 export function SectionHeader({ title, description }) {
   return (
     <View style={styles.sectionHeader}>
-      <Text accessibilityRole="header" style={styles.sectionTitle}>
-        {title}
-      </Text>
-      {description ? (
-        <Text style={styles.sectionDescription}>{description}</Text>
-      ) : null}
+      <Text accessibilityRole="header" style={styles.sectionTitle}>{title}</Text>
+      {description ? <Text style={styles.sectionDescription}>{description}</Text> : null}
     </View>
   );
 }
 
 export function PeriodSelector({ value, onChange, options }) {
   return (
-    <View
-      accessibilityLabel="Período del Dashboard"
-      accessibilityRole="tablist"
-      style={styles.segmentedControl}
-    >
+    <View accessibilityLabel="Período del Dashboard" accessibilityRole="tablist" style={styles.segmentedControl}>
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -68,14 +52,10 @@ export function PeriodSelector({ value, onChange, options }) {
               pressed && styles.segmentPressed,
             ]}
           >
-            <Text
-              style={[
-                styles.segmentLabel,
-                selected && styles.segmentLabelSelected,
-              ]}
-            >
-              {option.label}
-            </Text>
+            <View style={styles.segmentLabelRow}>
+              {selected ? <View accessible={false} style={styles.segmentDot} /> : null}
+              <Text style={[styles.segmentLabel, selected && styles.segmentLabelSelected]}>{option.label}</Text>
+            </View>
           </Pressable>
         );
       })}
@@ -83,52 +63,38 @@ export function PeriodSelector({ value, onChange, options }) {
   );
 }
 
-export function MetricCard({ icon, label, value, supporting, tone = "neutral" }) {
+export function AttentionRow({ icon, label, value, tone = "warning", last = false }) {
   const palette = TONES[tone];
   return (
     <View
       accessible
-      accessibilityLabel={`${label}: ${value}${supporting ? `. ${supporting}` : ""}`}
-      style={[styles.metricCard, { backgroundColor: palette.surface }]}
+      accessibilityLabel={`${value} ${label}`}
+      style={[styles.attentionRow, !last && styles.dividerBottom]}
     >
-      <MaterialCommunityIcons
-        accessible={false}
-        color={palette.foreground}
-        name={icon}
-        size={20}
-      />
-      <Text style={[styles.metricValue, { color: palette.foreground }]}>
-        {value}
-      </Text>
-      <Text style={styles.metricLabel}>{label}</Text>
-      {supporting ? <Text style={styles.metricSupporting}>{supporting}</Text> : null}
+      <View style={[styles.attentionIcon, { backgroundColor: palette.surface }]}>
+        <MaterialCommunityIcons accessible={false} color={palette.foreground} name={icon} size={20} />
+      </View>
+      <Text style={styles.attentionLabel}>{label}</Text>
+      <Text style={[styles.attentionValue, { color: palette.foreground }]}>{value}</Text>
     </View>
   );
 }
 
-export function OrderStatusSummary({ items, maxCount }) {
+export function OrderStatusGrid({ items }) {
   return (
-    <View style={styles.card}>
-      {items.map((item, index) => {
-        const progress = maxCount > 0 ? item.cantidad / maxCount : 0;
+    <View style={styles.statusGrid}>
+      {items.map((item) => {
+        const palette = TONES[item.tone ?? "neutral"];
         return (
-          <View key={item.estado} style={index > 0 ? styles.dividedRow : null}>
-            <View
-              accessible
-              accessibilityLabel={`${item.label}: ${item.cantidad}`}
-              style={styles.orderRow}
-            >
-              <Text style={styles.orderLabel}>{item.label}</Text>
-              <Text style={styles.orderCount}>{item.cantidad}</Text>
-            </View>
-            <View accessible={false} style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${Math.max(progress * 100, item.cantidad > 0 ? 8 : 0)}%` },
-                ]}
-              />
-            </View>
+          <View
+            accessible
+            accessibilityLabel={`${item.label}: ${item.cantidad}`}
+            key={item.estado}
+            style={[styles.statusTile, { backgroundColor: palette.surface }]}
+          >
+            <View style={[styles.statusMarker, { backgroundColor: palette.foreground }]} />
+            <Text style={styles.statusCount}>{item.cantidad}</Text>
+            <Text style={styles.statusLabel}>{item.label}</Text>
           </View>
         );
       })}
@@ -136,46 +102,51 @@ export function OrderStatusSummary({ items, maxCount }) {
   );
 }
 
-export function SummaryCard({ children, emphasized = false }) {
-  return (
-    <View style={[styles.card, emphasized && styles.cardEmphasized]}>
-      {children}
-    </View>
-  );
-}
-
-export function SummaryRow({ label, value, tone = "neutral", first = false }) {
+export function MetricTile({ icon, label, value, supporting, tone = "neutral", wide = false }) {
   const palette = TONES[tone];
   return (
-    <View style={[styles.summaryRow, !first && styles.summaryRowDivided]}>
-      <Text style={styles.summaryLabel}>{label}</Text>
-      <Text style={[styles.summaryValue, { color: palette.foreground }]}>
-        {value}
-      </Text>
+    <View
+      accessible
+      accessibilityLabel={`${label}: ${value}${supporting ? `. ${supporting}` : ""}`}
+      style={[styles.metricTile, wide && styles.metricTileWide]}
+    >
+      <View style={styles.metricTopRow}>
+        <MaterialCommunityIcons accessible={false} color={palette.foreground} name={icon} size={20} />
+        <Text style={[styles.metricValue, { color: palette.foreground }]}>{value}</Text>
+      </View>
+      <Text style={styles.metricLabel}>{label}</Text>
+      {supporting ? <Text style={styles.metricSupporting}>{supporting}</Text> : null}
     </View>
   );
 }
 
-export function RecentActivityItem({ item, typeLabel, formattedTime, last }) {
+export function SummarySurface({ children }) {
+  return <View style={styles.summarySurface}>{children}</View>;
+}
+
+export function OperationalTimelineItem({ item, typeLabel, actionLabel, formattedTime, last }) {
+  const palette = TONES[ACTIVITY_TONES[item.tipo] ?? "info"];
   return (
-    <View style={[styles.activityItem, !last && styles.activityItemDivided]}>
-      <View style={styles.activityIcon}>
-        <MaterialCommunityIcons
-          accessible={false}
-          color={colors.informational}
-          name={ACTIVITY_ICONS[item.tipo]}
-          size={20}
-        />
-      </View>
-      <View style={styles.activityContent}>
-        <View style={styles.activityMetaRow}>
-          <Text style={styles.activityType}>{typeLabel}</Text>
-          <Text style={styles.activityTime}>{formattedTime}</Text>
+    <View style={styles.timelineItem}>
+      <View style={styles.timelineRail}>
+        <View style={[styles.timelineIcon, { backgroundColor: palette.surface }]}>
+          <MaterialCommunityIcons
+            accessible={false}
+            color={palette.foreground}
+            name={ACTIVITY_ICONS[item.tipo] ?? "circle-outline"}
+            size={18}
+          />
         </View>
-        <Text style={styles.activitySummary}>{item.resumen}</Text>
-        {item.actor ? (
-          <Text style={styles.activityActor}>Por {item.actor.nombre}</Text>
-        ) : null}
+        {!last ? <View accessible={false} style={styles.timelineLine} /> : null}
+      </View>
+      <View accessible style={[styles.timelineContent, !last && styles.timelineSpacing]}>
+        <View style={styles.timelineMetaRow}>
+          <Text style={[styles.timelineType, { color: palette.foreground }]}>{typeLabel}</Text>
+          <Text style={styles.timelineTime}>{formattedTime}</Text>
+        </View>
+        <Text style={styles.timelineAction}>{actionLabel}</Text>
+        <Text style={styles.timelineSummary}>{item.resumen}</Text>
+        {item.actor ? <Text style={styles.timelineActor}>Por {item.actor.nombre}</Text> : null}
       </View>
     </View>
   );
@@ -189,6 +160,7 @@ export function DashboardLoading() {
       accessibilityRole="progressbar"
       style={styles.stateContainer}
     >
+      <View style={[styles.skeleton, styles.skeletonBrand]} />
       <View style={[styles.skeleton, styles.skeletonHeading]} />
       <View style={[styles.skeleton, styles.skeletonSegment]} />
       <View style={[styles.skeleton, styles.skeletonHero]} />
@@ -205,32 +177,17 @@ export function DashboardError({ message, onRetry }) {
   return (
     <View accessibilityLiveRegion="assertive" style={styles.stateContainer}>
       <View style={styles.errorIcon}>
-        <MaterialCommunityIcons
-          accessible={false}
-          color={colors.danger}
-          name="alert-circle-outline"
-          size={24}
-        />
+        <MaterialCommunityIcons accessible={false} color={colors.danger} name="alert-circle-outline" size={24} />
       </View>
-      <Text accessibilityRole="header" style={styles.stateTitle}>
-        No pudimos cargar el Dashboard
-      </Text>
+      <Text accessibilityRole="header" style={styles.stateTitle}>No pudimos cargar el Dashboard</Text>
       <Text style={styles.stateSupporting}>{message}</Text>
       <Pressable
         accessibilityLabel="Reintentar carga del Dashboard"
         accessibilityRole="button"
         onPress={onRetry}
-        style={({ pressed }) => [
-          styles.retryButton,
-          pressed && styles.retryButtonPressed,
-        ]}
+        style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
       >
-        <MaterialCommunityIcons
-          accessible={false}
-          color={colors.onPrimary}
-          name="refresh"
-          size={20}
-        />
+        <MaterialCommunityIcons accessible={false} color={colors.onPrimary} name="refresh" size={20} />
         <Text style={styles.retryLabel}>Reintentar</Text>
       </Pressable>
     </View>
@@ -240,16 +197,9 @@ export function DashboardError({ message, onRetry }) {
 export function ActivityEmptyState() {
   return (
     <View accessible style={styles.emptyState}>
-      <MaterialCommunityIcons
-        accessible={false}
-        color={colors.textSecondary}
-        name="timeline-clock-outline"
-        size={24}
-      />
+      <MaterialCommunityIcons accessible={false} color={colors.textSecondary} name="timeline-clock-outline" size={24} />
       <Text style={styles.emptyTitle}>Sin actividad en este período</Text>
-      <Text style={styles.emptySupporting}>
-        No se registraron hechos recientes para el rango seleccionado.
-      </Text>
+      <Text style={styles.emptySupporting}>No se registraron hechos recientes para el rango seleccionado.</Text>
     </View>
   );
 }
@@ -258,178 +208,65 @@ const styles = StyleSheet.create({
   sectionHeader: { gap: spacing.xs },
   sectionTitle: { ...typography.title2, color: colors.textPrimary },
   sectionDescription: { ...typography.supporting, color: colors.textSecondary },
-  segmentedControl: {
-    flexDirection: "row",
-    padding: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
+  segmentedControl: { flexDirection: "row", padding: spacing.xs, borderRadius: radii.lg, backgroundColor: colors.surfaceMuted },
+  segment: { minHeight: 48, flex: 1, alignItems: "center", justifyContent: "center", borderRadius: radii.md, paddingHorizontal: spacing.md },
+  segmentSelected: {
     backgroundColor: colors.surface,
+    elevation: 2,
+    shadowColor: colors.textPrimary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
   },
-  segment: {
-    minHeight: 48,
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.md,
-  },
-  segmentSelected: { backgroundColor: colors.primary },
-  segmentPressed: { opacity: 0.78 },
+  segmentPressed: { opacity: 0.72 },
+  segmentLabelRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  segmentDot: { width: 6, height: 6, borderRadius: radii.full, backgroundColor: colors.primary },
   segmentLabel: { ...typography.label, color: colors.textSecondary },
-  segmentLabelSelected: { color: colors.onPrimary },
-  metricCard: {
-    minWidth: "46%",
-    flex: 1,
-    gap: spacing.xs,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-  },
-  metricValue: {
-    ...typography.title1,
-    marginTop: spacing.xs,
-    fontVariant: ["tabular-nums"],
-  },
+  segmentLabelSelected: { color: colors.primary },
+  attentionRow: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg },
+  dividerBottom: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
+  attentionIcon: { width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: radii.md },
+  attentionLabel: { ...typography.body, flex: 1, color: colors.textPrimary },
+  attentionValue: { ...typography.title2, fontVariant: ["tabular-nums"] },
+  statusGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  statusTile: { minWidth: 132, flexGrow: 1, flexBasis: "30%", gap: spacing.xs, padding: spacing.md, borderRadius: radii.md },
+  statusMarker: { width: 24, height: 3, marginBottom: spacing.xs, borderRadius: radii.full },
+  statusCount: { ...typography.title1, color: colors.textPrimary, fontVariant: ["tabular-nums"] },
+  statusLabel: { ...typography.supporting, color: colors.textSecondary },
+  metricTile: { minWidth: 132, flexGrow: 1, flexBasis: "44%", gap: spacing.xs, paddingVertical: spacing.md },
+  metricTileWide: { flexBasis: "100%" },
+  metricTopRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  metricValue: { ...typography.title2, fontVariant: ["tabular-nums"] },
   metricLabel: { ...typography.label, color: colors.textPrimary },
   metricSupporting: { ...typography.caption, color: colors.textSecondary },
-  card: {
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface,
-  },
-  cardEmphasized: {
-    borderColor: colors.primary,
-    backgroundColor: colors.informationalSurface,
-  },
-  dividedRow: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  orderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.md,
-  },
-  orderLabel: { ...typography.supporting, flex: 1, color: colors.textPrimary },
-  orderCount: {
-    ...typography.bodyStrong,
-    color: colors.textPrimary,
-    fontVariant: ["tabular-nums"],
-  },
-  progressTrack: {
-    height: 4,
-    marginTop: spacing.sm,
-    overflow: "hidden",
-    borderRadius: radii.full,
-    backgroundColor: colors.disabledSurface,
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: radii.full,
-    backgroundColor: colors.primary,
-  },
-  summaryRow: {
-    minHeight: 44,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.lg,
-  },
-  summaryRowDivided: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  summaryLabel: { ...typography.supporting, flex: 1, color: colors.textSecondary },
-  summaryValue: {
-    ...typography.bodyStrong,
-    textAlign: "right",
-    fontVariant: ["tabular-nums"],
-  },
-  activityItem: { flexDirection: "row", gap: spacing.md, paddingVertical: spacing.md },
-  activityItemDivided: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  activityIcon: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radii.full,
-    backgroundColor: colors.informationalSurface,
-  },
-  activityContent: { flex: 1, gap: spacing.xs },
-  activityMetaRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-  },
-  activityType: { ...typography.label, color: colors.informational },
-  activityTime: { ...typography.caption, color: colors.textSecondary },
-  activitySummary: { ...typography.body, color: colors.textPrimary },
-  activityActor: { ...typography.caption, color: colors.textSecondary },
-  stateContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.md,
-    paddingVertical: spacing.xxl,
-  },
+  summarySurface: { paddingHorizontal: spacing.lg, borderRadius: radii.lg, backgroundColor: colors.surface },
+  timelineItem: { flexDirection: "row", gap: spacing.md },
+  timelineRail: { width: 40, alignItems: "center" },
+  timelineIcon: { width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: radii.md },
+  timelineLine: { width: 1, flex: 1, marginVertical: spacing.xs, backgroundColor: colors.border },
+  timelineContent: { minWidth: 0, flex: 1, gap: spacing.xs, paddingTop: 1 },
+  timelineSpacing: { paddingBottom: spacing.xl },
+  timelineMetaRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: spacing.sm },
+  timelineType: { ...typography.caption, fontWeight: "700", textTransform: "uppercase" },
+  timelineTime: { ...typography.caption, color: colors.textSecondary },
+  timelineAction: { ...typography.bodyStrong, color: colors.textPrimary },
+  timelineSummary: { ...typography.supporting, color: colors.textSecondary },
+  timelineActor: { ...typography.caption, color: colors.textSecondary },
+  stateContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md, paddingVertical: spacing.xxl },
   stateTitle: { ...typography.title2, color: colors.textPrimary, textAlign: "center" },
-  stateSupporting: {
-    ...typography.body,
-    maxWidth: 420,
-    color: colors.textSecondary,
-    textAlign: "center",
-  },
-  errorIcon: {
-    width: 48,
-    height: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radii.full,
-    backgroundColor: colors.dangerSurface,
-  },
-  retryButton: {
-    minHeight: 48,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.sm,
-    backgroundColor: colors.primary,
-  },
+  stateSupporting: { ...typography.body, maxWidth: 420, color: colors.textSecondary, textAlign: "center" },
+  errorIcon: { width: 48, height: 48, alignItems: "center", justifyContent: "center", borderRadius: radii.lg, backgroundColor: colors.dangerSurface },
+  retryButton: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radii.md, backgroundColor: colors.primary },
   retryButtonPressed: { backgroundColor: colors.primaryPressed },
   retryLabel: { ...typography.label, color: colors.onPrimary },
-  emptyState: {
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface,
-  },
+  emptyState: { alignItems: "center", gap: spacing.sm, paddingVertical: spacing.xl },
   emptyTitle: { ...typography.bodyStrong, color: colors.textPrimary, textAlign: "center" },
-  emptySupporting: {
-    ...typography.supporting,
-    color: colors.textSecondary,
-    textAlign: "center",
-  },
-  skeleton: { borderRadius: radii.sm, backgroundColor: colors.disabledSurface },
-  skeletonHeading: { width: "62%", height: 28, alignSelf: "flex-start" },
+  emptySupporting: { ...typography.supporting, color: colors.textSecondary, textAlign: "center" },
+  skeleton: { borderRadius: radii.md, backgroundColor: colors.disabledSurface },
+  skeletonBrand: { width: 132, height: 24, alignSelf: "flex-start" },
+  skeletonHeading: { width: "70%", height: 34, alignSelf: "flex-start" },
   skeletonSegment: { width: "100%", height: 56 },
-  skeletonHero: { width: "100%", height: 132 },
+  skeletonHero: { width: "100%", height: 210 },
   skeletonGrid: { width: "100%", flexDirection: "row", gap: spacing.md },
-  skeletonMetric: { flex: 1, height: 132 },
+  skeletonMetric: { flex: 1, height: 112 },
 });

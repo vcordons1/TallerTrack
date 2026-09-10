@@ -5,9 +5,9 @@ export default function InternalOrdersScreen() {
   return (
     <CapabilityBoundary destination="orders">
       <PlaceholderScreen
-        eyebrow="Espacio interno"
         title="Órdenes"
-        description="Aquí se incorporarán las tareas permitidas de recepción, trabajo técnico o repuestos sin mezclar sus proyecciones."
+        description="Las tareas de recepción, trabajo técnico y repuestos estarán disponibles según tus capacidades."
+        productShell
       />
     </CapabilityBoundary>
   );

@@ -1,16 +1,27 @@
 import { StyleSheet, Text, View } from "react-native";
 
+import { ProductHeader } from "./ProductHeader";
 import { ScreenContainer } from "./ScreenContainer";
 import { colors, radii, spacing, typography } from "../theme/tokens";
 
-export function PlaceholderScreen({ eyebrow, title, description, children }) {
+export function PlaceholderScreen({
+  eyebrow,
+  title,
+  description,
+  children,
+  productShell = false,
+}) {
   return (
-    <ScreenContainer>
-      <View accessible accessibilityRole="header" style={styles.heading}>
-        {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.description}>{description}</Text>
-      </View>
+    <ScreenContainer fullSafeArea={productShell}>
+      {productShell ? (
+        <ProductHeader context={description} title={title} />
+      ) : (
+        <View accessible accessibilityRole="header" style={styles.heading}>
+          {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.description}>{description}</Text>
+        </View>
+      )}
       {children ? <View style={styles.content}>{children}</View> : null}
     </ScreenContainer>
   );
@@ -48,7 +59,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   content: {
-    marginTop: spacing.xl,
+    marginTop: spacing.xxl,
   },
   card: {
     gap: spacing.md,

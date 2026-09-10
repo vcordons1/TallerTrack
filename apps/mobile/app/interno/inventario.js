@@ -5,9 +5,9 @@ export default function InternalInventoryScreen() {
   return (
     <CapabilityBoundary destination="inventory">
       <PlaceholderScreen
-        eyebrow="Espacio interno"
         title="Inventario"
-        description="Base reservada para stock, necesidades, reservas y movimientos de Inventario."
+        description="Stock, necesidades, reservas y movimientos estarán disponibles en una próxima etapa."
+        productShell
       />
     </CapabilityBoundary>
   );
