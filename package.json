@@ -8,5 +8,12 @@
   "engines": {
     "node": ">=24.17.0 <25"
   },
+  "scripts": {
+    "db:tool:setup": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/scripts/setup-flyway.ps1",
+    "db:migrate": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/scripts/invoke-flyway.ps1 migrate",
+    "db:info": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/scripts/invoke-flyway.ps1 info",
+    "db:validate": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/scripts/invoke-flyway.ps1 validate",
+    "test:db:integration": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/tests/foundation.integration.ps1"
+  },
   "packageManager": "npm@11.13.0"
 }
