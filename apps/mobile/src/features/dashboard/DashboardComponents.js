@@ -63,19 +63,36 @@ export function PeriodSelector({ value, onChange, options }) {
   );
 }
 
-export function AttentionRow({ icon, label, value, tone = "warning", last = false }) {
+export function AttentionRow({ icon, label, value, tone = "warning", last = false, onPress }) {
   const palette = TONES[tone];
-  return (
-    <View
-      accessible
-      accessibilityLabel={`${value} ${label}`}
-      style={[styles.attentionRow, !last && styles.dividerBottom]}
-    >
-      <View style={[styles.attentionIcon, { backgroundColor: palette.surface }]}>
+  const content = (
+    <>
+      <View style={[styles.attentionIcon, { backgroundColor: palette.surface }]}> 
         <MaterialCommunityIcons accessible={false} color={palette.foreground} name={icon} size={20} />
       </View>
       <Text style={styles.attentionLabel}>{label}</Text>
       <Text style={[styles.attentionValue, { color: palette.foreground }]}>{value}</Text>
+      {onPress ? <MaterialCommunityIcons accessible={false} color={colors.textSecondary} name="chevron-right" size={22} /> : null}
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable
+        accessibilityHint="Abre el listado filtrado de órdenes"
+        accessibilityLabel={`${value} ${label}`}
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({ pressed }) => [styles.attentionRow, !last && styles.dividerBottom, pressed && styles.attentionRowPressed]}
+      >
+        {content}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View accessible accessibilityLabel={`${value} ${label}`} style={[styles.attentionRow, !last && styles.dividerBottom]}>
+      {content}
     </View>
   );
 }
@@ -224,6 +241,7 @@ const styles = StyleSheet.create({
   segmentLabel: { ...typography.label, color: colors.textSecondary },
   segmentLabelSelected: { color: colors.primary },
   attentionRow: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.lg },
+  attentionRowPressed: { backgroundColor: colors.primarySurface },
   dividerBottom: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
   attentionIcon: { width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: radii.md },
   attentionLabel: { ...typography.body, flex: 1, color: colors.textPrimary },

@@ -1,4 +1,5 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -150,7 +151,12 @@ function DashboardContent({ dashboard, activity, selectedPeriod, onPeriodChange,
       <View style={styles.section}>
         <SectionHeader title="Requiere atención" description="Señales actuales que conviene revisar primero." />
         <SummarySurface>
-          <AttentionRow icon="file-check-outline" label="Autorizaciones pendientes" value={waitingAuthorization} />
+          <AttentionRow
+            icon="file-check-outline"
+            label="Autorizaciones pendientes"
+            onPress={() => router.push({ pathname: "/interno/ordenes", params: { filtro: "ESPERANDO_AUTORIZACION" } })}
+            value={waitingAuthorization}
+          />
           <AttentionRow icon="file-document-alert-outline" label="Propuestas pendientes" value={dashboard.actual.propuestasPendientes} />
           <AttentionRow icon="package-variant-minus" label="Repuestos bajo mínimo" tone="danger" value={dashboard.actual.repuestosBajoMinimo} />
           <AttentionRow icon="account-alert-outline" label="Clientes con deuda" tone="danger" value={dashboard.actual.clientesConDeuda} last />

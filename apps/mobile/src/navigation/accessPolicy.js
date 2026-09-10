@@ -13,6 +13,7 @@ const ACTOR_TYPES = Object.freeze({
 
 const CAPABILITIES = Object.freeze({
   INTERNAL_HOME: "INTERNAL_HOME",
+  ORDERS_READ: "ORDERS_READ",
   ORDERS_WORKSPACE: "ORDERS_WORKSPACE",
   AGENDA_WORKSPACE: "AGENDA_WORKSPACE",
   INVENTORY_WORKSPACE: "INVENTORY_WORKSPACE",
@@ -66,6 +67,15 @@ const INTERNAL_DESTINATIONS = Object.freeze([
 function deriveInternalCapabilities(roles = []) {
   const assignedRoles = new Set(roles);
   const capabilities = new Set([CAPABILITIES.INTERNAL_HOME]);
+
+  if (
+    assignedRoles.has(ROLES.ADMINISTRADOR) ||
+    assignedRoles.has(ROLES.RECEPCIONISTA) ||
+    assignedRoles.has(ROLES.MECANICO) ||
+    assignedRoles.has(ROLES.INVENTARIO)
+  ) {
+    capabilities.add(CAPABILITIES.ORDERS_READ);
+  }
 
   if (
     assignedRoles.has(ROLES.RECEPCIONISTA) ||

@@ -14,10 +14,26 @@ test("an administrator does not inherit operational workspaces", () => {
   const capabilities = deriveInternalCapabilities([ROLES.ADMINISTRADOR]);
 
   assert.equal(capabilities.has(CAPABILITIES.ADMIN_DASHBOARD), true);
+  assert.equal(capabilities.has(CAPABILITIES.ORDERS_READ), true);
   assert.equal(capabilities.has(CAPABILITIES.AGENDA_WORKSPACE), true);
   assert.equal(capabilities.has(CAPABILITIES.MANAGEMENT_WORKSPACE), true);
   assert.equal(capabilities.has(CAPABILITIES.ORDERS_WORKSPACE), false);
   assert.equal(capabilities.has(CAPABILITIES.INVENTORY_WORKSPACE), false);
+});
+
+test("order reading is broader than the operational orders tab", () => {
+  assert.equal(
+    hasInternalCapability([ROLES.ADMINISTRADOR], CAPABILITIES.ORDERS_READ),
+    true,
+  );
+  assert.equal(
+    getInternalDestinations([ROLES.ADMINISTRADOR]).some(({ key }) => key === "orders"),
+    false,
+  );
+  assert.equal(
+    hasInternalCapability([], CAPABILITIES.ORDERS_READ),
+    false,
+  );
 });
 
 test("the administrative Dashboard is isolated from non-administrator actors", () => {
