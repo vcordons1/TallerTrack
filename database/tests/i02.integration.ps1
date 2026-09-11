@@ -165,7 +165,7 @@ try {
     $second = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $flyway migrate 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { throw "Second Flyway migrate failed: $second" }
     $validate = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $flyway validate 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0 -or $validate -notmatch 'Successfully validated 13 migrations') { throw "Flyway validate failed: $validate" }
+    if ($LASTEXITCODE -ne 0 -or $validate -notmatch 'Successfully validated 14 migrations') { throw "Flyway validate failed: $validate" }
 
     $structure = Invoke-SysSql @"
 alter session set current_schema=$schema;
@@ -219,13 +219,13 @@ commit;
     $runtimeGrants = Invoke-SysSql @"
 select 'SYS='||listagg(privilege,',') within group(order by privilege) from dba_sys_privs where grantee='$runtime';
 select 'SELECTS='||count(*) from dba_tab_privs where grantee='$runtime' and owner='$schema' and privilege='SELECT';
-select 'EXECUTES='||count(*) from dba_tab_privs where grantee='$runtime' and owner='$schema' and privilege='EXECUTE' and table_name in ('PKG_VEHICULOS','PKG_AGENDA');
+select 'EXECUTES='||count(*) from dba_tab_privs where grantee='$runtime' and owner='$schema' and privilege='EXECUTE' and table_name in ('PKG_VEHICULOS','PKG_AGENDA','PKG_ORDENES');
 select 'DML='||count(*) from dba_tab_privs where grantee='$runtime' and owner='$schema' and privilege in ('INSERT','UPDATE','DELETE');
 select 'QUOTA='||count(*) from dba_ts_quotas where username='$runtime' and max_bytes<>0;
 "@
     Assert-Output 'runtime system privilege' $runtimeGrants 'SYS=CREATE SESSION'
     Assert-Output 'runtime SELECT grants' $runtimeGrants 'SELECTS=3'
-    Assert-Output 'runtime package grant' $runtimeGrants 'EXECUTES=2'
+    Assert-Output 'runtime package grant' $runtimeGrants 'EXECUTES=3'
     Assert-Output 'runtime direct DML' $runtimeGrants 'DML=0'
     Assert-Output 'runtime quota' $runtimeGrants 'QUOTA=0'
     Assert-Output 'runtime DDL denial' (Invoke-RuntimeSql 'create table forbidden_i02(id number);' $false) 'ORA-01031'
@@ -537,7 +537,7 @@ select 'SECRET_COLUMNS='||count(*) from user_tab_columns where table_name in ('C
     Write-Output 'PASS I02 structure: four tables, exact seeds, canonical types/nullability, enabled constraints, indexes, owner projection, and valid package.'
     Write-Output 'PASS I02 transactions: T24, T10, and T11 success, rollback, stale-version, same-owner, and idempotent replay cases.'
     Write-Output 'PASS I02 concurrency: independent Oracle sessions forced property, transfer, QR-rotation, and current-QR races; exactly one winner/current row.'
-    Write-Output 'PASS I02 runtime security: TT_APP analogue has three readiness SELECT grants and both complete package EXECUTEs; no DDL, direct DML, table/hash SELECT, or quota.'
+    Write-Output 'PASS I02 runtime security: TT_APP analogue has three readiness SELECT grants and the three complete package EXECUTEs; no DDL, direct DML, table/hash SELECT, or quota.'
     Write-Output "ORACLE_EVIDENCE $($version -replace '\s+',' ')"
     Write-Output "I02_EVIDENCE $($evidence -replace '\s+',' ')"
 }

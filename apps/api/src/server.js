@@ -16,6 +16,7 @@ import { createPrivateFileStorage } from "./platform/private-file-storage.js";
 import { createReadinessCheck } from "./platform/readiness.js";
 import { createTechnicalImageValidator } from "./platform/technical-image-validator.js";
 import { createUploadReceiptSigner } from "./platform/upload-receipt.js";
+import { createOpenCommercialOrder } from "./modules/service-orders/open-commercial-order.js";
 
 function listen(app, port) {
   return new Promise((resolve, reject) => {
@@ -73,6 +74,13 @@ export async function startServer({
   });
   const poolManager = createOraclePoolManager({ driver, config });
   await poolManager.initialize();
+  const openCommercialOrder = createOpenCommercialOrder({
+    preparedUpload,
+    poolManager,
+    schema: config.schema,
+    maximumFiles: privateFileConfig.maxFilesPerOperation,
+    driver,
+  });
 
   let server;
   try {
@@ -87,7 +95,9 @@ export async function startServer({
   process.once("SIGINT", () => { void shutdown("SIGINT").catch(() => {}); });
   process.once("SIGTERM", () => { void shutdown("SIGTERM").catch(() => {}); });
   logger.log(`TallerTrack API listening on port ${server.address().port}`);
-  return Object.freeze({ server, poolManager, privateFileStorage, preparedUpload, shutdown });
+  return Object.freeze({
+    server, poolManager, privateFileStorage, preparedUpload, openCommercialOrder, shutdown,
+  });
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {

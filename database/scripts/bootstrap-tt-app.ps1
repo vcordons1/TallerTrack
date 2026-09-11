@@ -54,10 +54,10 @@ select 'OBJECTS=' || count(*) from dba_objects
 where owner='$OwnerSchema'
   and ((object_name in ('CONFIG_TALLER','ROL') and object_type='TABLE')
     or (object_name='flyway_schema_history' and object_type='TABLE')
-    or (object_name in ('PKG_VEHICULOS','PKG_AGENDA') and object_type='PACKAGE'));
+    or (object_name in ('PKG_VEHICULOS','PKG_AGENDA','PKG_ORDENES') and object_type='PACKAGE'));
 "@
     if ($preflight -notmatch 'RUNTIME=0') { throw "Oracle user $RuntimeUser already exists; refusing to replace or alter it." }
-    if ($preflight -notmatch 'OBJECTS=5') { throw "Schema $OwnerSchema is not migrated through the objects required by TT_APP." }
+    if ($preflight -notmatch 'OBJECTS=6') { throw "Schema $OwnerSchema is not migrated through the objects required by TT_APP." }
 
     Invoke-SysSql @"
 create user $RuntimeUser identified by "$plainPassword"
@@ -74,6 +74,7 @@ grant select on $OwnerSchema.CONFIG_TALLER to $RuntimeUser;
 grant select on $OwnerSchema.ROL to $RuntimeUser;
 grant execute on $OwnerSchema.PKG_VEHICULOS to $RuntimeUser;
 grant execute on $OwnerSchema.PKG_AGENDA to $RuntimeUser;
+grant execute on $OwnerSchema.PKG_ORDENES to $RuntimeUser;
 "@ | Out-Null
 
     $evidence = Invoke-SysSql @"
@@ -85,12 +86,12 @@ select 'QUOTA=' || count(*) from dba_ts_quotas where username='$RuntimeUser' and
 "@
     $normalizedEvidence = $evidence -replace '\s+', ''
     if ($normalizedEvidence -notmatch 'SYS=CREATESESSION' -or
-        $normalizedEvidence -notmatch "OBJECT=$OwnerSchema\.CONFIG_TALLER:SELECT,$OwnerSchema\.PKG_AGENDA:EXECUTE,$OwnerSchema\.PKG_VEHICULOS:EXECUTE,$OwnerSchema\.ROL:SELECT,$OwnerSchema\.flyway_schema_history:SELECT" -or
+        $normalizedEvidence -notmatch "OBJECT=$OwnerSchema\.CONFIG_TALLER:SELECT,$OwnerSchema\.PKG_AGENDA:EXECUTE,$OwnerSchema\.PKG_ORDENES:EXECUTE,$OwnerSchema\.PKG_VEHICULOS:EXECUTE,$OwnerSchema\.ROL:SELECT,$OwnerSchema\.flyway_schema_history:SELECT" -or
         $normalizedEvidence -notmatch 'QUOTA=0') {
         throw "TT_APP privilege verification did not match the required least-privilege contract: $evidence"
     }
 
-    Write-Output "Oracle runtime user $RuntimeUser created with CREATE SESSION, three readiness-only SELECT grants, and EXECUTE on PKG_VEHICULOS and PKG_AGENDA; no nonzero quota, DDL, or direct DML privilege."
+    Write-Output "Oracle runtime user $RuntimeUser created with CREATE SESSION, three readiness-only SELECT grants, and EXECUTE on PKG_VEHICULOS, PKG_AGENDA, and PKG_ORDENES; no nonzero quota, DDL, or direct DML privilege."
 }
 catch {
     if ($created) {
