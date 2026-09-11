@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import oracledb from "oracledb";
@@ -7,7 +10,20 @@ import { startServer } from "../src/server.js";
 
 const enabled = process.env.TT_RUN_ORACLE_INTEGRATION === "1";
 
-test("Express reaches the migrated schema through one real Thin-mode pool", { skip: !enabled }, async () => {
+async function environmentWithPrivateStorage(t, environment) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "tallertrack-api-oracle-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  return {
+    ...environment,
+    TT_PRIVATE_STORAGE_ROOT: root,
+    TT_EVIDENCE_MAX_FILE_BYTES: "10485760",
+    TT_EVIDENCE_MAX_PIXELS: "25000000",
+    TT_EVIDENCE_MAX_DIMENSION: "8192",
+    TT_EVIDENCE_MAX_FILES_PER_OPERATION: "10",
+  };
+}
+
+test("Express reaches the migrated schema through one real Thin-mode pool", { skip: !enabled }, async (t) => {
   let poolCreations = 0;
   const driver = {
     createPool: (...arguments_) => {
@@ -16,7 +32,7 @@ test("Express reaches the migrated schema through one real Thin-mode pool", { sk
     },
   };
   const runtime = await startServer({
-    environment: process.env,
+    environment: await environmentWithPrivateStorage(t, process.env),
     driver,
     logger: { log() {}, error() {} },
     port: 0,
@@ -44,10 +60,10 @@ test("Express reaches the migrated schema through one real Thin-mode pool", { sk
   }
 });
 
-test("a real incorrect credential returns safe NOT READY while liveness remains 200", { skip: !enabled }, async () => {
+test("a real incorrect credential returns safe NOT READY while liveness remains 200", { skip: !enabled }, async (t) => {
   const wrongPassword = `${process.env.TT_ORACLE_PASSWORD}x`;
   const runtime = await startServer({
-    environment: { ...process.env, TT_ORACLE_PASSWORD: wrongPassword },
+    environment: await environmentWithPrivateStorage(t, { ...process.env, TT_ORACLE_PASSWORD: wrongPassword }),
     logger: { log() {}, error() {} },
     port: 0,
   });

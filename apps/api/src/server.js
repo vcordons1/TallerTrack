@@ -1,10 +1,12 @@
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 import oracledb from "oracledb";
 
 import { createApp } from "./app.js";
-import { loadOracleConfig, loadPort } from "./platform/config.js";
+import { loadOracleConfig, loadPort, loadPrivateFileConfig } from "./platform/config.js";
 import { createOraclePoolManager } from "./platform/oracle-pool.js";
+import { createPrivateFileStorage } from "./platform/private-file-storage.js";
 import { createReadinessCheck } from "./platform/readiness.js";
 
 function listen(app, port) {
@@ -48,6 +50,12 @@ export async function startServer({
   port = loadPort(environment),
 } = {}) {
   const config = loadOracleConfig(environment);
+  const privateFileConfig = loadPrivateFileConfig(environment);
+  const privateFileStorage = createPrivateFileStorage({
+    ...privateFileConfig,
+    createHash,
+  });
+  await privateFileStorage.initialize();
   const poolManager = createOraclePoolManager({ driver, config });
   await poolManager.initialize();
 
@@ -64,7 +72,7 @@ export async function startServer({
   process.once("SIGINT", () => { void shutdown("SIGINT").catch(() => {}); });
   process.once("SIGTERM", () => { void shutdown("SIGTERM").catch(() => {}); });
   logger.log(`TallerTrack API listening on port ${server.address().port}`);
-  return Object.freeze({ server, poolManager, shutdown });
+  return Object.freeze({ server, poolManager, privateFileStorage, shutdown });
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -1,4 +1,8 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 const ORACLE_IDENTIFIER = /^[A-Z][A-Z0-9_$#]{0,29}$/;
+const REPOSITORY_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 
 function requireValue(environment, name) {
   const value = environment[name];
@@ -21,6 +25,11 @@ function readInteger(environment, name, defaultValue, { minimum, maximum }) {
     throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`);
   }
   return value;
+}
+
+function readRequiredInteger(environment, name, bounds) {
+  requireValue(environment, name);
+  return readInteger(environment, name, undefined, bounds);
 }
 
 function readIdentifier(environment, name) {
@@ -60,4 +69,32 @@ export function loadOracleConfig(environment = process.env) {
 
 export function loadPort(environment = process.env) {
   return readInteger(environment, "PORT", 3000, { minimum: 1, maximum: 65535 });
+}
+
+export function loadPrivateFileConfig(environment = process.env) {
+  const configuredRoot = requireValue(environment, "TT_PRIVATE_STORAGE_ROOT");
+
+  return Object.freeze({
+    rootDirectory: path.resolve(configuredRoot),
+    maxFileBytes: readRequiredInteger(environment, "TT_EVIDENCE_MAX_FILE_BYTES", {
+      minimum: 1,
+      maximum: 100 * 1024 * 1024,
+    }),
+    maxPixels: readRequiredInteger(environment, "TT_EVIDENCE_MAX_PIXELS", {
+      minimum: 1,
+      maximum: 100_000_000,
+    }),
+    maxDimension: readRequiredInteger(environment, "TT_EVIDENCE_MAX_DIMENSION", {
+      minimum: 1,
+      maximum: 50_000,
+    }),
+    maxFilesPerOperation: readRequiredInteger(environment, "TT_EVIDENCE_MAX_FILES_PER_OPERATION", {
+      minimum: 1,
+      maximum: 100,
+    }),
+    prohibitedPublicDirectories: Object.freeze([
+      path.join(REPOSITORY_ROOT, "apps", "api", "public"),
+      path.join(REPOSITORY_ROOT, "apps", "mobile", "public"),
+    ]),
+  });
 }

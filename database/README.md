@@ -108,6 +108,13 @@ $env:TT_ORACLE_CONNECT_STRING = '127.0.0.1:1521/XEPDB1'
 $env:TT_ORACLE_SCHEMA = 'TT_OWNER'
 $env:TT_ORACLE_EXPECTED_DATABASE = 'XE'
 $env:TT_ORACLE_EXPECTED_SERVICE = 'XEPDB1'
+$env:TT_PRIVATE_STORAGE_ROOT = '.data/private-files'
+$env:TT_EVIDENCE_MAX_FILE_BYTES = '10485760'
+$env:TT_EVIDENCE_MAX_PIXELS = '25000000'
+$env:TT_EVIDENCE_MAX_DIMENSION = '8192'
+$env:TT_EVIDENCE_MAX_FILES_PER_OPERATION = '10'
 Remove-Variable runtimePassword, credential
 npm.cmd start --workspace apps/api
 ```
+
+The relative storage root is resolved from the process working directory and is ignored by Git. Production-like runs must point it at a durable backend-only volume, never a frontend public/static directory. The evidence limits are the provisional TT-017 operational profile, not measured production capacity; see decision 001.

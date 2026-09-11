@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { loadOracleConfig } from "../src/platform/config.js";
+import { loadOracleConfig, loadPrivateFileConfig } from "../src/platform/config.js";
 
 const validEnvironment = {
   TT_ORACLE_USER: "TT_APP",
@@ -31,5 +31,40 @@ test("missing and invalid configuration fails without exposing secrets", () => {
       assert.equal(error.message.includes(validEnvironment.TT_ORACLE_PASSWORD), false);
       return true;
     });
+  }
+});
+
+const validPrivateFileEnvironment = {
+  TT_PRIVATE_STORAGE_ROOT: ".data/private-files",
+  TT_EVIDENCE_MAX_FILE_BYTES: "10485760",
+  TT_EVIDENCE_MAX_PIXELS: "25000000",
+  TT_EVIDENCE_MAX_DIMENSION: "8192",
+  TT_EVIDENCE_MAX_FILES_PER_OPERATION: "10",
+};
+
+test("private file limits are explicit, bounded environment configuration", () => {
+  const config = loadPrivateFileConfig(validPrivateFileEnvironment);
+  assert.equal(config.rootDirectory.endsWith(".data\\private-files") || config.rootDirectory.endsWith(".data/private-files"), true);
+  assert.deepEqual(
+    {
+      maxFileBytes: config.maxFileBytes,
+      maxPixels: config.maxPixels,
+      maxDimension: config.maxDimension,
+      maxFilesPerOperation: config.maxFilesPerOperation,
+    },
+    { maxFileBytes: 10_485_760, maxPixels: 25_000_000, maxDimension: 8192, maxFilesPerOperation: 10 },
+  );
+  assert.equal(config.prohibitedPublicDirectories.length, 2);
+});
+
+test("missing or invalid private file configuration fails safely", () => {
+  for (const environment of [
+    { ...validPrivateFileEnvironment, TT_PRIVATE_STORAGE_ROOT: undefined },
+    { ...validPrivateFileEnvironment, TT_EVIDENCE_MAX_FILE_BYTES: undefined },
+    { ...validPrivateFileEnvironment, TT_EVIDENCE_MAX_PIXELS: "0" },
+    { ...validPrivateFileEnvironment, TT_EVIDENCE_MAX_DIMENSION: "not-a-number" },
+    { ...validPrivateFileEnvironment, TT_EVIDENCE_MAX_FILES_PER_OPERATION: "101" },
+  ]) {
+    assert.throws(() => loadPrivateFileConfig(environment));
   }
 });
