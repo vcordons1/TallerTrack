@@ -150,7 +150,7 @@ try {
     $second = Invoke-Flyway 'migrate'
     $validate = Invoke-Flyway 'validate'
     Assert-Output 'second migrate no-op' $second 'Schema .* is up to date|No migration necessary'
-    Assert-Output 'Flyway validation' $validate 'Successfully validated 14 migrations'
+    Assert-Output 'Flyway validation' $validate 'Successfully validated 15 migrations'
 
     $structure = Invoke-SysSql @"
 alter session set current_schema=$schema;
@@ -221,7 +221,7 @@ select 'QUOTA='||count(*) from dba_ts_quotas where username='$runtime' and max_b
 "@
     Assert-Output 'runtime grants' $grants 'SYS=CREATE SESSION'
     Assert-Output 'runtime select count' $grants 'SELECTS=3'
-    Assert-Output 'runtime execute count' $grants 'EXECUTES=3'
+    Assert-Output 'runtime execute count' $grants 'EXECUTES=4'
     Assert-Output 'runtime direct DML grants' $grants 'DML=0'
     Assert-Output 'runtime quota' $grants 'QUOTA=0'
     Assert-Output 'runtime history update denied' (Invoke-RuntimeSql "update $schema.cita_evento set motivo='X';" $false) 'ORA-00942|ORA-01031'
@@ -386,7 +386,7 @@ select 'DUP_ACTIVE='||count(*) from (select id_vehiculo from orden_trabajo where
     Write-Output 'PASS I03 orders: opening ownership triple, appointment vehicle, single appointment use, exact states/purpose/mileage, frozen contractual client, and multiple final histories.'
     Write-Output 'PASS I03 mechanics: one open participation per order/mechanic, historical reassignment, and user FK.'
     Write-Output 'PASS I03 concurrency: two independent Oracle sessions forced simultaneous active-order inserts; one committed, one received ORA-00001, one active row remained.'
-    Write-Output 'PASS I03 runtime security: TT_APP analogue has only three readiness SELECTs plus three package EXECUTEs; direct table/history DML and table reads are denied.'
+    Write-Output 'PASS I03 runtime security: TT_APP analogue has only three readiness SELECTs plus four runtime package EXECUTEs; direct table/history DML and table reads are denied.'
     Write-Output "I03_EVIDENCE $($evidence -replace '\s+',' ')"
 }
 finally {

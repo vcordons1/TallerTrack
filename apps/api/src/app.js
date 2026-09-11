@@ -1,9 +1,12 @@
 import express from "express";
 
-export function createApp({ checkReadiness = async () => false } = {}) {
+import { apiErrorHandler, createIdentityHttp, requestContext } from "./modules/identity/identity-http.js";
+
+export function createApp({ checkReadiness = async () => false, identityService } = {}) {
   const app = express();
 
   app.disable("x-powered-by");
+  app.use(requestContext);
 
   app.get("/health/live", (_request, response) => {
     response.status(200).json({ status: "ok" });
@@ -21,6 +24,12 @@ export function createApp({ checkReadiness = async () => false } = {}) {
 
     response.status(503).json({ status: "not_ready" });
   });
+
+  if (identityService !== undefined) {
+    app.use("/api/v1", createIdentityHttp({ identityService }).router);
+  }
+
+  app.use(apiErrorHandler);
 
   return app;
 }

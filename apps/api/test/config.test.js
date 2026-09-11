@@ -2,10 +2,31 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  loadAuthConfig,
   loadOracleConfig,
   loadPrivateFileConfig,
   loadUploadReceiptConfig,
 } from "../src/platform/config.js";
+
+test("authentication profile requires secrets and coherent bounded TTLs", () => {
+  const environment = {
+    TT_AUTH_SIGNING_KEY_BASE64: Buffer.alloc(32, 0x41).toString("base64"),
+    TT_AUTH_ISSUER: "tallertrack-local",
+    TT_AUTH_AUDIENCE: "tallertrack-api",
+  };
+  assert.deepEqual(loadAuthConfig(environment), {
+    signingKey: Buffer.alloc(32, 0x41), issuer: "tallertrack-local", audience: "tallertrack-api",
+    algorithm: "HS256", accessTtlSeconds: 600, sessionTtlSeconds: 43_200,
+    refreshTtlSeconds: 43_200, loginMaximumAttempts: 5, loginWindowSeconds: 900,
+    loginBucketCapacity: 5000, hashMaximumConcurrency: 4,
+  });
+  assert.throws(() => loadAuthConfig({ ...environment, TT_AUTH_ACCESS_TTL_SECONDS: "43200" }),
+    /TT_AUTH_ACCESS_TTL_SECONDS|access < refresh/);
+  assert.throws(() => loadAuthConfig({ ...environment, TT_AUTH_REFRESH_TTL_SECONDS: "50000" }),
+    /refresh <= session/);
+  assert.throws(() => loadAuthConfig({ ...environment, TT_AUTH_SIGNING_KEY_BASE64: "c2hvcnQ=" }),
+    /32 and 128 bytes/);
+});
 
 const validEnvironment = {
   TT_ORACLE_USER: "TT_APP",

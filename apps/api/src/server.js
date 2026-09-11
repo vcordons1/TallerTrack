@@ -9,6 +9,7 @@ import {
   loadPort,
   loadPrivateFileConfig,
   loadUploadReceiptConfig,
+  loadAuthConfig,
 } from "./platform/config.js";
 import { createOraclePoolManager } from "./platform/oracle-pool.js";
 import { createPreparedPrivateUpload } from "./platform/prepared-private-upload.js";
@@ -17,6 +18,10 @@ import { createReadinessCheck } from "./platform/readiness.js";
 import { createTechnicalImageValidator } from "./platform/technical-image-validator.js";
 import { createUploadReceiptSigner } from "./platform/upload-receipt.js";
 import { createOpenCommercialOrder } from "./modules/service-orders/open-commercial-order.js";
+import { createIdentityService } from "./modules/identity/identity-service.js";
+import { createOracleIdentityRepository } from "./modules/identity/oracle-identity-repository.js";
+import { createPasswordService } from "./modules/identity/passwords.js";
+import { createTokenService } from "./modules/identity/tokens.js";
 
 function listen(app, port) {
   return new Promise((resolve, reject) => {
@@ -59,6 +64,7 @@ export async function startServer({
   port = loadPort(environment),
 } = {}) {
   const config = loadOracleConfig(environment);
+  const authConfig = loadAuthConfig(environment);
   const privateFileConfig = loadPrivateFileConfig(environment);
   const uploadReceiptConfig = loadUploadReceiptConfig(environment);
   const privateFileStorage = createPrivateFileStorage({
@@ -74,6 +80,12 @@ export async function startServer({
   });
   const poolManager = createOraclePoolManager({ driver, config });
   await poolManager.initialize();
+  const identityService = await createIdentityService({
+    repository: createOracleIdentityRepository({ poolManager, schema: config.schema, driver }),
+    passwordService: createPasswordService(),
+    tokenService: createTokenService({ config: authConfig }),
+    authConfig,
+  });
   const openCommercialOrder = createOpenCommercialOrder({
     preparedUpload,
     poolManager,
@@ -85,7 +97,7 @@ export async function startServer({
   let server;
   try {
     const checkReadiness = createReadinessCheck({ poolManager, config });
-    server = await listen(createApp({ checkReadiness }), port);
+    server = await listen(createApp({ checkReadiness, identityService }), port);
   } catch (error) {
     await poolManager.close();
     throw error;
@@ -96,7 +108,8 @@ export async function startServer({
   process.once("SIGTERM", () => { void shutdown("SIGTERM").catch(() => {}); });
   logger.log(`TallerTrack API listening on port ${server.address().port}`);
   return Object.freeze({
-    server, poolManager, privateFileStorage, preparedUpload, openCommercialOrder, shutdown,
+    server, poolManager, privateFileStorage, preparedUpload, openCommercialOrder,
+    identityService, shutdown,
   });
 }
 

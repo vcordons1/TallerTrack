@@ -120,3 +120,47 @@ export function loadUploadReceiptConfig(environment = process.env) {
     }),
   });
 }
+
+export function loadAuthConfig(environment = process.env) {
+  const accessTtlSeconds = readInteger(environment, "TT_AUTH_ACCESS_TTL_SECONDS", 600, {
+    minimum: 60,
+    maximum: 3600,
+  });
+  const sessionTtlSeconds = readInteger(environment, "TT_AUTH_SESSION_TTL_SECONDS", 43_200, {
+    minimum: 600,
+    maximum: 604_800,
+  });
+  const refreshTtlSeconds = readInteger(environment, "TT_AUTH_REFRESH_TTL_SECONDS", 43_200, {
+    minimum: 600,
+    maximum: 604_800,
+  });
+  if (accessTtlSeconds >= refreshTtlSeconds || refreshTtlSeconds > sessionTtlSeconds) {
+    throw new Error("Auth TTLs must satisfy access < refresh <= session");
+  }
+
+  return Object.freeze({
+    signingKey: readBase64Secret(environment, "TT_AUTH_SIGNING_KEY_BASE64"),
+    issuer: requireValue(environment, "TT_AUTH_ISSUER"),
+    audience: requireValue(environment, "TT_AUTH_AUDIENCE"),
+    algorithm: "HS256",
+    accessTtlSeconds,
+    sessionTtlSeconds,
+    refreshTtlSeconds,
+    loginMaximumAttempts: readInteger(environment, "TT_AUTH_LOGIN_MAX_ATTEMPTS", 5, {
+      minimum: 1,
+      maximum: 100,
+    }),
+    loginWindowSeconds: readInteger(environment, "TT_AUTH_LOGIN_WINDOW_SECONDS", 900, {
+      minimum: 1,
+      maximum: 86_400,
+    }),
+    loginBucketCapacity: readInteger(environment, "TT_AUTH_LOGIN_BUCKET_CAPACITY", 5000, {
+      minimum: 100,
+      maximum: 100_000,
+    }),
+    hashMaximumConcurrency: readInteger(environment, "TT_AUTH_HASH_MAX_CONCURRENCY", 4, {
+      minimum: 1,
+      maximum: 32,
+    }),
+  });
+}
