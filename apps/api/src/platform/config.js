@@ -40,6 +40,18 @@ function readIdentifier(environment, name) {
   return value;
 }
 
+function readBase64Secret(environment, name) {
+  const encoded = requireValue(environment, name);
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 !== 0) {
+    throw new Error(`${name} must contain canonical base64`);
+  }
+  const value = Buffer.from(encoded, "base64");
+  if (value.toString("base64") !== encoded || value.length < 32 || value.length > 128) {
+    throw new Error(`${name} must decode to between 32 and 128 bytes`);
+  }
+  return value;
+}
+
 export function loadOracleConfig(environment = process.env) {
   const poolMin = readInteger(environment, "TT_ORACLE_POOL_MIN", 0, { minimum: 0, maximum: 100 });
   const poolMax = readInteger(environment, "TT_ORACLE_POOL_MAX", 4, { minimum: 1, maximum: 100 });
@@ -96,5 +108,15 @@ export function loadPrivateFileConfig(environment = process.env) {
       path.join(REPOSITORY_ROOT, "apps", "api", "public"),
       path.join(REPOSITORY_ROOT, "apps", "mobile", "public"),
     ]),
+  });
+}
+
+export function loadUploadReceiptConfig(environment = process.env) {
+  return Object.freeze({
+    hmacKey: readBase64Secret(environment, "TT_UPLOAD_RECEIPT_HMAC_KEY_BASE64"),
+    ttlSeconds: readRequiredInteger(environment, "TT_UPLOAD_RECEIPT_TTL_SECONDS", {
+      minimum: 1,
+      maximum: 86_400,
+    }),
   });
 }

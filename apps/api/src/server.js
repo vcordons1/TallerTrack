@@ -4,10 +4,18 @@ import { pathToFileURL } from "node:url";
 import oracledb from "oracledb";
 
 import { createApp } from "./app.js";
-import { loadOracleConfig, loadPort, loadPrivateFileConfig } from "./platform/config.js";
+import {
+  loadOracleConfig,
+  loadPort,
+  loadPrivateFileConfig,
+  loadUploadReceiptConfig,
+} from "./platform/config.js";
 import { createOraclePoolManager } from "./platform/oracle-pool.js";
+import { createPreparedPrivateUpload } from "./platform/prepared-private-upload.js";
 import { createPrivateFileStorage } from "./platform/private-file-storage.js";
 import { createReadinessCheck } from "./platform/readiness.js";
+import { createTechnicalImageValidator } from "./platform/technical-image-validator.js";
+import { createUploadReceiptSigner } from "./platform/upload-receipt.js";
 
 function listen(app, port) {
   return new Promise((resolve, reject) => {
@@ -51,11 +59,18 @@ export async function startServer({
 } = {}) {
   const config = loadOracleConfig(environment);
   const privateFileConfig = loadPrivateFileConfig(environment);
+  const uploadReceiptConfig = loadUploadReceiptConfig(environment);
   const privateFileStorage = createPrivateFileStorage({
     ...privateFileConfig,
     createHash,
   });
   await privateFileStorage.initialize();
+  const receiptSigner = createUploadReceiptSigner(uploadReceiptConfig);
+  const preparedUpload = createPreparedPrivateUpload({
+    storage: privateFileStorage,
+    validateTechnicalImage: createTechnicalImageValidator(privateFileConfig),
+    receiptSigner,
+  });
   const poolManager = createOraclePoolManager({ driver, config });
   await poolManager.initialize();
 
@@ -72,7 +87,7 @@ export async function startServer({
   process.once("SIGINT", () => { void shutdown("SIGINT").catch(() => {}); });
   process.once("SIGTERM", () => { void shutdown("SIGTERM").catch(() => {}); });
   logger.log(`TallerTrack API listening on port ${server.address().port}`);
-  return Object.freeze({ server, poolManager, privateFileStorage, shutdown });
+  return Object.freeze({ server, poolManager, privateFileStorage, preparedUpload, shutdown });
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {

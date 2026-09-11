@@ -197,6 +197,39 @@ export function createPrivateFileStorage({
       }
     },
 
+    async validateObject(objectKey, validate) {
+      if (typeof validate !== "function") {
+        throw safeStorageError("INVALID_VALIDATION", "A private object validator is required");
+      }
+      const inspected = await inspectObject(objectKey);
+      if (inspected === undefined) {
+        throw safeStorageError("OBJECT_NOT_FOUND", "The private object was not found");
+      }
+
+      const hash = createHash("sha256");
+      let size = 0;
+      try {
+        const stream = await this.openObject(objectKey);
+        for await (const chunk of stream) {
+          const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          size += bytes.length;
+          hash.update(bytes);
+        }
+        const sha256 = hash.digest("hex");
+        const validated = await validate({ filePath: inspected.target, size, sha256 });
+        const after = await lstat(inspected.target);
+        if (!after.isFile() || after.isSymbolicLink()
+          || after.dev !== inspected.before.dev || after.ino !== inspected.before.ino
+          || after.size !== inspected.before.size || after.mtimeMs !== inspected.before.mtimeMs) {
+          throw new Error("object changed during validation");
+        }
+        return Object.freeze({ size, sha256, ...validated });
+      } catch (error) {
+        if (error instanceof PrivateFileStorageError || error?.code === "IMAGE_VALIDATION_FAILED") throw error;
+        throw safeStorageError("STORAGE_READ_FAILED", "The private object could not be validated", error);
+      }
+    },
+
     async deleteOrphan(objectKey) {
       await assertRootIdentity();
       try {

@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { loadOracleConfig, loadPrivateFileConfig } from "../src/platform/config.js";
+import {
+  loadOracleConfig,
+  loadPrivateFileConfig,
+  loadUploadReceiptConfig,
+} from "../src/platform/config.js";
 
 const validEnvironment = {
   TT_ORACLE_USER: "TT_APP",
@@ -66,5 +70,28 @@ test("missing or invalid private file configuration fails safely", () => {
     { ...validPrivateFileEnvironment, TT_EVIDENCE_MAX_FILES_PER_OPERATION: "101" },
   ]) {
     assert.throws(() => loadPrivateFileConfig(environment));
+  }
+});
+
+const receiptSecret = Buffer.alloc(32, 0x5a).toString("base64");
+
+test("upload receipt signing key and TTL are required and bounded", () => {
+  const config = loadUploadReceiptConfig({
+    TT_UPLOAD_RECEIPT_HMAC_KEY_BASE64: receiptSecret,
+    TT_UPLOAD_RECEIPT_TTL_SECONDS: "900",
+  });
+  assert.deepEqual(config, { hmacKey: Buffer.alloc(32, 0x5a), ttlSeconds: 900 });
+
+  for (const environment of [
+    { TT_UPLOAD_RECEIPT_TTL_SECONDS: "900" },
+    { TT_UPLOAD_RECEIPT_HMAC_KEY_BASE64: "not-base64", TT_UPLOAD_RECEIPT_TTL_SECONDS: "900" },
+    { TT_UPLOAD_RECEIPT_HMAC_KEY_BASE64: Buffer.alloc(31).toString("base64"), TT_UPLOAD_RECEIPT_TTL_SECONDS: "900" },
+    { TT_UPLOAD_RECEIPT_HMAC_KEY_BASE64: receiptSecret },
+    { TT_UPLOAD_RECEIPT_HMAC_KEY_BASE64: receiptSecret, TT_UPLOAD_RECEIPT_TTL_SECONDS: "0" },
+  ]) {
+    assert.throws(() => loadUploadReceiptConfig(environment), (error) => {
+      assert.equal(error.message.includes(receiptSecret), false);
+      return true;
+    });
   }
 });

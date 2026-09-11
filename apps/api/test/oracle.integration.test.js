@@ -20,6 +20,8 @@ async function environmentWithPrivateStorage(t, environment) {
     TT_EVIDENCE_MAX_PIXELS: "25000000",
     TT_EVIDENCE_MAX_DIMENSION: "8192",
     TT_EVIDENCE_MAX_FILES_PER_OPERATION: "10",
+    TT_UPLOAD_RECEIPT_HMAC_KEY_BASE64: Buffer.alloc(32, 0x41).toString("base64"),
+    TT_UPLOAD_RECEIPT_TTL_SECONDS: "900",
   };
 }
 

@@ -150,7 +150,7 @@ try {
     $second = Invoke-Flyway 'migrate'
     $validate = Invoke-Flyway 'validate'
     Assert-Output 'second migrate no-op' $second 'Schema .* is up to date|No migration necessary'
-    Assert-Output 'Flyway validation' $validate 'Successfully validated 11 migrations'
+    Assert-Output 'Flyway validation' $validate 'Successfully validated 13 migrations'
 
     $structure = Invoke-SysSql @"
 alter session set current_schema=$schema;
@@ -160,7 +160,7 @@ declare
   begin if a<>e then raise_application_error(-20190,n||': expected '||e||', got '||a); end if; end;
 begin
   select count(*) into c from all_tables where owner='$schema' and table_name in ('CITA','CITA_EVENTO','ORDEN_TRABAJO','ORDEN_EVENTO','ORDEN_MECANICO'); eq('I03 tables',c,5);
-  select count(*) into c from all_tables where owner='$schema' and table_name in ('ARCHIVO_PRIVADO','EVIDENCIA'); eq('G03 deferred tables',c,0);
+  select count(*) into c from all_tables where owner='$schema' and table_name in ('ARCHIVO_PRIVADO','EVIDENCIA'); eq('G03B tables',c,2);
   select count(*) into c from all_constraints where owner='$schema' and table_name in ('CITA','CITA_EVENTO','ORDEN_TRABAJO','ORDEN_EVENTO','ORDEN_MECANICO') and status<>'ENABLED'; eq('disabled constraints',c,0);
   select count(*) into c from all_constraints where owner='$schema' and constraint_name in ('FK_CITA_QR_VEHICULO','FK_ORDEN_PROPIEDAD','FK_ORDEN_CITA_VEHICULO','UQ_ORDEN_CITA','CK_CITA_EVENTO_SEMANTICA') and status='ENABLED'; eq('critical constraints',c,5);
   select count(*) into c from all_indexes where owner='$schema' and index_name in ('UQ_ORDEN_ACTIVA_VEHICULO','UQ_ORDEN_MECANICO_ABIERTO') and uniqueness='UNIQUE' and status='VALID'; eq('conditional indexes',c,2);
@@ -381,7 +381,7 @@ select 'DUP_ACTIVE='||count(*) from (select id_vehiculo from orden_trabajo where
     Assert-Output 'final appointment vehicle invariant' $evidence 'WRONG_CITA=0'
     Assert-Output 'final active-order invariant' $evidence 'DUP_ACTIVE=0'
 
-    Write-Output 'PASS I03 migrations: upgrade V008->V011, second migrate no-op, and Flyway validate green; aggregate foundation covers clean V001->V011.'
+    Write-Output 'PASS I03 migrations: upgrade V008->current, second migrate no-op, and Flyway validate green; aggregate foundation covers clean V001->current.'
     Write-Output 'PASS I03 appointments: CUENTA/QR/PERSONAL variants, exact states, typed immutable history, optimistic versioning, reprogramming, and final-state rejection.'
     Write-Output 'PASS I03 orders: opening ownership triple, appointment vehicle, single appointment use, exact states/purpose/mileage, frozen contractual client, and multiple final histories.'
     Write-Output 'PASS I03 mechanics: one open participation per order/mechanic, historical reassignment, and user FK.'
