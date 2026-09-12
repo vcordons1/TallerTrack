@@ -97,7 +97,14 @@ export async function startServer({
   let server;
   try {
     const checkReadiness = createReadinessCheck({ poolManager, config });
-    server = await listen(createApp({ checkReadiness, identityService }), port);
+    server = await listen(createApp({
+      checkReadiness,
+      identityService,
+      preparedUpload,
+      openCommercialOrder,
+      privateFileConfig,
+      logger,
+    }), port);
   } catch (error) {
     await poolManager.close();
     throw error;

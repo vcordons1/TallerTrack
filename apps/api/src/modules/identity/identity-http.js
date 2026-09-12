@@ -91,11 +91,31 @@ export function createRequireAuthenticated({ identityService }) {
 export function requestContext(request, response, next) {
   request.requestId = randomUUID();
   response.setHeader("X-Request-ID", request.requestId);
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("X-Frame-Options", "DENY");
+  response.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
   if (request.path.startsWith("/api/v1/")) response.setHeader("Cache-Control", "no-store");
   next();
 }
 
-export function apiErrorHandler(error, request, response, _next) {
+const CONFLICTS = new Set([
+  "CLAVE_REUTILIZADA", "ORDEN_ACTIVA_EXISTENTE", "PROPIEDAD_CAMBIADA", "OBJETO_YA_CONSUMIDO",
+]);
+const DOMAIN_FAILURES = new Set([
+  "DEUDA_NO_VERIFICABLE", "CLIENTE_NO_DISPONIBLE", "VEHICULO_NO_ENCONTRADO",
+  "VEHICULO_NO_DISPONIBLE", "EVIDENCIA_REQUERIDA", "EVIDENCIA_NO_APLICABLE", "EVIDENCIA_INVALIDA",
+]);
+const RECEIPT_FAILURES = new Set([
+  "INVALID_UPLOAD_RECEIPT", "UPLOAD_RECEIPT_CONTEXT_MISMATCH", "UPLOAD_RECEIPT_EXPIRED",
+  "PREPARED_OBJECT_NOT_FOUND", "PREPARED_OBJECT_READ_FAILED", "PREPARED_OBJECT_METADATA_MISMATCH",
+  "PREPARED_OBJECT_NOT_PUBLISHED",
+]);
+const STORAGE_FAILURES = new Set([
+  "INVALID_STORAGE_CONFIGURATION", "PUBLIC_STORAGE_ROOT", "STORAGE_UNAVAILABLE",
+  "STORAGE_WRITE_FAILED", "STORAGE_READ_FAILED",
+]);
+
+export function apiErrorHandler(error, request, response, _next, logger = console) {
   let status = 500;
   let code = "ERROR_INTERNO";
   let message = "No se pudo completar la solicitud.";
@@ -116,6 +136,60 @@ export function apiErrorHandler(error, request, response, _next) {
     code = "LIMITE_SOLICITUD_EXCEDIDO";
     message = "La solicitud excede el límite permitido.";
     recovery = "CORREGIR";
+  } else if (error?.code === "LIMITE_SOLICITUD_EXCEDIDO" || error?.code === "FILE_TOO_LARGE") {
+    status = 413;
+    code = "LIMITE_SOLICITUD_EXCEDIDO";
+    message = "La solicitud excede el límite permitido.";
+    recovery = "CORREGIR";
+  } else if (error?.code === "IMAGE_VALIDATION_FAILED") {
+    status = 415;
+    code = "FORMATO_NO_ADMITIDO";
+    message = "La fotografía no tiene un formato JPEG o PNG válido.";
+    recovery = "CORREGIR";
+  } else if (CONFLICTS.has(error?.code)) {
+    status = 409;
+    code = error.code;
+    message = "La operación entra en conflicto con el estado actual.";
+    recovery = error.code === "CLAVE_REUTILIZADA" ? "CORREGIR" : "RECARGAR";
+  } else if (DOMAIN_FAILURES.has(error?.code) || RECEIPT_FAILURES.has(error?.code)
+    || error?.code === "EVIDENCE_REQUIRED") {
+    status = 422;
+    code = error.code === "EVIDENCE_REQUIRED" ? "EVIDENCIA_REQUERIDA"
+      : error.code === "EVIDENCIA_INVALIDA" ? "EVIDENCIA_NO_APLICABLE"
+      : RECEIPT_FAILURES.has(error.code) ? "EVIDENCIA_NO_APLICABLE" : error.code;
+    message = "La operación no cumple las condiciones vigentes.";
+    recovery = "CORREGIR";
+  } else if (error?.code === "ACTOR_O_SESION_INVALIDO") {
+    status = 401;
+    code = "SESION_INVALIDA";
+    message = "No fue posible validar el acceso.";
+    recovery = "REAUTENTICAR";
+  } else if (error?.code === "ROL_RECEPCIONISTA_REQUERIDO") {
+    status = 403;
+    code = "ACCION_NO_PERMITIDA";
+    message = "La acción no está permitida.";
+    recovery = "CORREGIR";
+  } else if (error?.code === "INVALID_ORDER_OPENING" || error?.code === "RECEPCION_INVALIDA"
+    || error?.code === "SOLICITUD_INVALIDA" || error?.code === "SOLICITUD_ABORTADA") {
+    status = 400;
+    code = "SOLICITUD_INVALIDA";
+    message = "La solicitud no es válida.";
+    recovery = "CORREGIR";
+  } else if (error?.code === "CLAVE_REQUERIDA") {
+    status = 400;
+    code = "CLAVE_REQUERIDA";
+    message = "La clave de idempotencia es obligatoria.";
+    recovery = "CORREGIR";
+  } else if (STORAGE_FAILURES.has(error?.code)) {
+    status = 503;
+    code = "SERVICIO_NO_DISPONIBLE";
+    message = "El almacenamiento privado no está disponible.";
+    recovery = "ESPERAR";
+  } else if (error?.code === "RESULTADO_NO_CONFIRMADO") {
+    status = 503;
+    code = "RESULTADO_INCIERTO";
+    message = "No fue posible confirmar el resultado de la operación.";
+    recovery = "REINTENTAR_MISMA_CLAVE";
   }
   if (status === 429 && Number.isSafeInteger(error.retryAfterSeconds)) {
     response.setHeader("Retry-After", String(error.retryAfterSeconds));
@@ -129,5 +203,13 @@ export function apiErrorHandler(error, request, response, _next) {
     details: {},
   };
   if (request.method !== "GET") body.resultado = status >= 500 ? "DESCONOCIDO" : "NO_CONFIRMADO";
+  if (status >= 500) {
+    logger?.error?.({
+      requestId: body.requestId,
+      method: request.method,
+      path: request.path,
+      category: code,
+    });
+  }
   response.status(status).json({ error: body });
 }

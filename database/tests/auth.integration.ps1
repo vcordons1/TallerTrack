@@ -19,7 +19,7 @@ $internalPassword = "In1!$suffix-secure"
 $login = "recepcion.$($suffix.ToLowerInvariant())"
 $saved = @{}
 $environmentNames = @(
-    'TT_DB_URL','TT_DB_USER','TT_DB_PASSWORD','TT_RUN_AUTH_ORACLE_INTEGRATION',
+    'TT_DB_URL','TT_DB_USER','TT_DB_PASSWORD','TT_RUN_AUTH_ORACLE_INTEGRATION','TT_RUN_RECEPTION_HTTP_ORACLE_INTEGRATION',
     'TT_ORACLE_USER','TT_ORACLE_PASSWORD','TT_ORACLE_CONNECT_STRING','TT_ORACLE_SCHEMA',
     'TT_ORACLE_EXPECTED_DATABASE','TT_ORACLE_EXPECTED_SERVICE','TT_ORACLE_POOL_MIN','TT_ORACLE_POOL_MAX','TT_ORACLE_POOL_INCREMENT',
     'TT_AUTH_TEST_OWNER','TT_AUTH_TEST_OWNER_PASSWORD','TT_AUTH_TEST_LOGIN','TT_AUTH_TEST_PASSWORD'
@@ -89,6 +89,24 @@ select 'HASHED='||case when credencial_hash like '`$argon2id`$v=19`$m=65536,p=1,
         throw "Unexpected bootstrap evidence: $bootstrapEvidence"
     }
 
+    Invoke-OwnerSql @"
+declare l_actor number; begin
+  select id_usuario into l_actor from usuario where login_normalizado='$login';
+  insert into comando(id_comando,ambito,clave_idempotencia,solicitud_hash,tipo_operacion,id_actor,registrado_en,resultado_codigo)
+    values(9000,'fixture/HTTP','fixture',hextoraw('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),'PRUEBA_HTTP',l_actor,systimestamp,200);
+  for i in 0..2 loop
+    insert into cliente(id_cliente,nombre,activo,creado_en,creado_por,actualizado_en,actualizado_por,version_fila)
+      values(200+i,'Cliente HTTP '||i,1,systimestamp,l_actor,systimestamp,l_actor,1);
+    insert into vehiculo(id_vehiculo,codigo_tipo,marca,modelo,activo,creado_en,creado_por,actualizado_en,actualizado_por,version_fila)
+      values(1000+i,'AUTOMOVIL','Marca HTTP','Modelo '||i,1,systimestamp,l_actor,systimestamp,l_actor,1);
+    insert into propiedad_vehiculo(id_propiedad,id_vehiculo,id_cliente,desde_en,motivo,registrado_por,id_comando)
+      values(1100+i,1000+i,200+i,systimestamp-interval '1' day,'Propiedad HTTP',l_actor,9000);
+  end loop;
+  commit;
+end;
+/
+"@ | Out-Null
+
     $rollbackEvidence = Invoke-OwnerSql @"
 delete from rol where codigo_rol='MECANICO';
 commit;
@@ -118,6 +136,7 @@ select 'DIRECT_DML='||count(*) from dba_tab_privs where owner='$owner' and grant
     }
 
     $env:TT_RUN_AUTH_ORACLE_INTEGRATION = '1'
+    $env:TT_RUN_RECEPTION_HTTP_ORACLE_INTEGRATION = '1'
     $env:TT_ORACLE_USER = $runtimeUser
     $env:TT_ORACLE_PASSWORD = $runtimePassword
     $env:TT_ORACLE_CONNECT_STRING = '127.0.0.1:1521/XEPDB1'
@@ -135,6 +154,17 @@ select 'DIRECT_DML='||count(*) from dba_tab_privs where owner='$owner' and grant
     $oldPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
+        $receptionOutput = & node --test apps/api/test/reception-http.oracle.integration.test.js 2>&1 | Out-String
+        $receptionExitCode = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $oldPreference }
+    if ($receptionExitCode -ne 0) { throw "Reception HTTP Oracle tests failed: $receptionOutput" }
+    foreach ($secret in $ownerPassword,$runtimePassword,$internalPassword) {
+        if ($receptionOutput.Contains($secret)) { throw 'Reception HTTP test output exposed a generated secret.' }
+    }
+
+    $oldPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
         $testOutput = & npm.cmd test --workspace apps/api -- --test-name-pattern='I01-I04 use real Oracle' 2>&1 | Out-String
         $testExitCode = $LASTEXITCODE
     } finally { $ErrorActionPreference = $oldPreference }
@@ -146,6 +176,7 @@ select 'DIRECT_DML='||count(*) from dba_tab_privs where owner='$owner' and grant
     Write-Output 'PASS bootstrap: owner-only tool created one real internal RECEPCIONISTA with Argon2id and exact roles; injected role failure rolled back user and roles.'
     Write-Output 'PASS least privilege: TT_APP executes PKG_IDENTIDAD, cannot execute bootstrap, and has no direct identity DML.'
     Write-Output 'PASS auth HTTP/Oracle: I01-I04, live roles, rotation, reuse-family revocation, two-connection race, logout and deactivation.'
+    Write-Output 'PASS reception HTTP/Oracle: login, bounded photo upload, receipt, T01 opening, exact bytes, replay/conflict, live-role withdrawal and concurrent O02.'
     Write-Output "ORACLE_EVIDENCE $($bootstrapEvidence -replace '\s+',' ') $($grants -replace '\s+',' ')"
 }
 catch { $failure = $_ }

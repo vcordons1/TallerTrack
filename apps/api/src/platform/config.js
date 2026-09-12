@@ -104,6 +104,26 @@ export function loadPrivateFileConfig(environment = process.env) {
       minimum: 1,
       maximum: 100,
     }),
+    multipartMaxFields: readInteger(environment, "TT_EVIDENCE_MULTIPART_MAX_FIELDS", 1, {
+      minimum: 1,
+      maximum: 10,
+    }),
+    multipartMaxFieldBytes: readInteger(environment, "TT_EVIDENCE_MULTIPART_MAX_FIELD_BYTES", 4096, {
+      minimum: 256,
+      maximum: 65_536,
+    }),
+    uploadMaximumRequests: readInteger(environment, "TT_EVIDENCE_UPLOAD_MAX_REQUESTS", 20, {
+      minimum: 1,
+      maximum: 1000,
+    }),
+    uploadWindowSeconds: readInteger(environment, "TT_EVIDENCE_UPLOAD_WINDOW_SECONDS", 60, {
+      minimum: 1,
+      maximum: 86_400,
+    }),
+    uploadBucketCapacity: readInteger(environment, "TT_EVIDENCE_UPLOAD_BUCKET_CAPACITY", 5000, {
+      minimum: 100,
+      maximum: 100_000,
+    }),
     prohibitedPublicDirectories: Object.freeze([
       path.join(REPOSITORY_ROOT, "apps", "api", "public"),
       path.join(REPOSITORY_ROOT, "apps", "mobile", "public"),

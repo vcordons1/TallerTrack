@@ -47,6 +47,7 @@ function harness({ executeError } = {}) {
       return { outBinds: {
         orderId: "700", state: "RECIBIDO", version: "1", clientId: "200",
         propertyId: "1100", evidenceIdsJson: "[800,801]", repeated: 0,
+        commandId: "900", confirmedAt: "2026-09-12T10:00:00.000000Z",
       } };
     },
     async commit() { events.push(["commit"]); },
@@ -76,6 +77,7 @@ test("all receipts are context-checked and revalidated before one Oracle transac
   assert.deepEqual(result, {
     orderId: "700", state: "RECIBIDO", version: 1, contractualClientId: "200",
     openingPropertyId: "1100", evidenceIds: [800, 801], repeated: false,
+    commandId: "900", confirmedAt: "2026-09-12T10:00:00.000000Z",
   });
   assert.deepEqual(events.map(([name]) => name), ["verify", "verify", "connection", "execute", "commit", "close"]);
   for (const [, argument] of events.filter(([name]) => name === "verify")) {

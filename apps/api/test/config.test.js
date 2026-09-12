@@ -76,8 +76,17 @@ test("private file limits are explicit, bounded environment configuration", () =
       maxPixels: config.maxPixels,
       maxDimension: config.maxDimension,
       maxFilesPerOperation: config.maxFilesPerOperation,
+      multipartMaxFields: config.multipartMaxFields,
+      multipartMaxFieldBytes: config.multipartMaxFieldBytes,
+      uploadMaximumRequests: config.uploadMaximumRequests,
+      uploadWindowSeconds: config.uploadWindowSeconds,
+      uploadBucketCapacity: config.uploadBucketCapacity,
     },
-    { maxFileBytes: 10_485_760, maxPixels: 25_000_000, maxDimension: 8192, maxFilesPerOperation: 10 },
+    {
+      maxFileBytes: 10_485_760, maxPixels: 25_000_000, maxDimension: 8192,
+      maxFilesPerOperation: 10, multipartMaxFields: 1, multipartMaxFieldBytes: 4096,
+      uploadMaximumRequests: 20, uploadWindowSeconds: 60, uploadBucketCapacity: 5000,
+    },
   );
   assert.equal(config.prohibitedPublicDirectories.length, 2);
 });

@@ -1,8 +1,16 @@
 import express from "express";
 
 import { apiErrorHandler, createIdentityHttp, requestContext } from "./modules/identity/identity-http.js";
+import { createReceptionHttp } from "./modules/reception/reception-http.js";
 
-export function createApp({ checkReadiness = async () => false, identityService } = {}) {
+export function createApp({
+  checkReadiness = async () => false,
+  identityService,
+  preparedUpload,
+  openCommercialOrder,
+  privateFileConfig,
+  logger,
+} = {}) {
   const app = express();
 
   app.disable("x-powered-by");
@@ -26,10 +34,20 @@ export function createApp({ checkReadiness = async () => false, identityService 
   });
 
   if (identityService !== undefined) {
-    app.use("/api/v1", createIdentityHttp({ identityService }).router);
+    const identityHttp = createIdentityHttp({ identityService });
+    if (preparedUpload !== undefined || openCommercialOrder !== undefined) {
+      app.use("/api/v1", createReceptionHttp({
+        identityService,
+        requireAuthenticated: identityHttp.requireAuthenticated,
+        preparedUpload,
+        openCommercialOrder,
+        privateFileConfig,
+      }).router);
+    }
+    app.use("/api/v1", identityHttp.router);
   }
 
-  app.use(apiErrorHandler);
+  app.use((error, request, response, next) => apiErrorHandler(error, request, response, next, logger));
 
   return app;
 }

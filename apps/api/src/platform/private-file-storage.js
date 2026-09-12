@@ -165,7 +165,8 @@ export function createPrivateFileStorage({
         await link(temporaryPath, target);
         return Object.freeze({ objectKey, size, sha256, ...validated });
       } catch (error) {
-        if (error instanceof PrivateFileStorageError || error?.code === "IMAGE_VALIDATION_FAILED") throw error;
+        if (error instanceof PrivateFileStorageError || error?.code === "IMAGE_VALIDATION_FAILED"
+          || error?.code === "LIMITE_SOLICITUD_EXCEDIDO") throw error;
         if (error?.code === "EEXIST") {
           throw safeStorageError("OBJECT_ALREADY_EXISTS", "The private object already exists", error);
         }

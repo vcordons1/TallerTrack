@@ -39,31 +39,37 @@ export function createPreparedPrivateUpload({ storage, validateTechnicalImage, r
   }
 
   async function prepare({ source, declaredMimeType, actorId, context } = {}) {
-    const stored = await storage.writeObject({
-      source,
-      validate: (filePath, facts) => validateTechnicalImage(filePath, { ...facts, declaredMimeType }),
-    });
-    if (!(await storage.exists(stored.objectKey))) {
-      throw mismatch("PREPARED_OBJECT_NOT_PUBLISHED");
-    }
-    const issued = receiptSigner.issue({
-      actorId,
-      context,
-      object: {
+    let stored;
+    try {
+      stored = await storage.writeObject({
+        source,
+        validate: (filePath, facts) => validateTechnicalImage(filePath, { ...facts, declaredMimeType }),
+      });
+      if (!(await storage.exists(stored.objectKey))) {
+        throw mismatch("PREPARED_OBJECT_NOT_PUBLISHED");
+      }
+      const issued = receiptSigner.issue({
+        actorId,
+        context: await context,
+        object: {
+          objectKey: stored.objectKey,
+          mimeType: stored.mimeType,
+          sizeBytes: stored.size,
+          sha256: stored.sha256,
+        },
+      });
+      return Object.freeze({
+        receipt: issued.receipt,
+        expiresAt: new Date(issued.payload.expiresAt).toISOString(),
         objectKey: stored.objectKey,
         mimeType: stored.mimeType,
         sizeBytes: stored.size,
         sha256: stored.sha256,
-      },
-    });
-    return Object.freeze({
-      receipt: issued.receipt,
-      expiresAt: new Date(issued.payload.expiresAt).toISOString(),
-      objectKey: stored.objectKey,
-      mimeType: stored.mimeType,
-      sizeBytes: stored.size,
-      sha256: stored.sha256,
-    });
+      });
+    } catch (error) {
+      if (stored !== undefined) await storage.deleteOrphan(stored.objectKey).catch(() => {});
+      throw error;
+    }
   }
 
   async function verifyAndRevalidate({ receipt, expectedActorId, expectedContext } = {}) {
@@ -103,7 +109,14 @@ export function createPreparedPrivateUpload({ storage, validateTechnicalImage, r
     return payload;
   }
 
-  return Object.freeze({ prepare, verifyAndRevalidate });
+  async function discardPrepared(prepared) {
+    if (prepared === null || typeof prepared !== "object" || typeof prepared.objectKey !== "string") {
+      throw new TypeError("Prepared private upload cleanup target is invalid");
+    }
+    return storage.deleteOrphan(prepared.objectKey);
+  }
+
+  return Object.freeze({ prepare, verifyAndRevalidate, discardPrepared });
 }
 
 export function isUploadReceiptFailure(error) {

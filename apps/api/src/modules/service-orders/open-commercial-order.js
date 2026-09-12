@@ -158,11 +158,12 @@ export function createOpenCommercialOrder({
     let committed = false;
     try {
       const result = await connection.execute(
-        `BEGIN ${schema}.pkg_ordenes.abrir_orden_comercial(
+        `BEGIN ${schema}.pkg_recepcion_http.abrir_orden_comercial(
           :scope, :idempotencyKey, :requestHash, :actorId, :sessionId, :correlationId,
           :vehicleId, :expectedPropertyId, :expectedOwnerId, :mileageEntry,
           :entryReason, :visibleDamage, :evidenceJson,
-          :orderId, :state, :version, :clientId, :propertyId, :evidenceIdsJson, :repeated
+          :orderId, :state, :version, :clientId, :propertyId, :evidenceIdsJson, :repeated,
+          :commandId, :confirmedAt
         ); END;`,
         {
           scope: `actor:${input.actorId}/T01`,
@@ -185,6 +186,8 @@ export function createOpenCommercialOrder({
           propertyId: { dir: driver.BIND_OUT, type: driver.STRING, maxSize: 40 },
           evidenceIdsJson: { dir: driver.BIND_OUT, type: driver.STRING, maxSize: 4000 },
           repeated: { dir: driver.BIND_OUT, type: driver.NUMBER },
+          commandId: { dir: driver.BIND_OUT, type: driver.STRING, maxSize: 40 },
+          confirmedAt: { dir: driver.BIND_OUT, type: driver.STRING, maxSize: 40 },
         },
         { autoCommit: false },
       );
@@ -198,6 +201,8 @@ export function createOpenCommercialOrder({
         openingPropertyId: result.outBinds.propertyId,
         evidenceIds: Object.freeze(JSON.parse(result.outBinds.evidenceIdsJson)),
         repeated: result.outBinds.repeated === 1,
+        commandId: result.outBinds.commandId,
+        confirmedAt: result.outBinds.confirmedAt,
       });
     } catch (error) {
       if (!committed) {
