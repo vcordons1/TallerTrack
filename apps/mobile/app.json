@@ -2,10 +2,17 @@
   "expo": {
     "name": "TallerTrack",
     "slug": "tallertrack",
+    "version": "0.1.0",
     "scheme": "tallertrack",
+    "android": {
+      "package": "com.tallertrack.app",
+      "versionCode": 1
+    },
     "plugins": [
       "expo-router",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-secure-store",
+      ["expo-image-picker", { "microphonePermission": false }]
     ]
   }
 }

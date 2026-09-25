@@ -1,7 +1,7 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ProductHeader } from "../../components/ProductHeader";
@@ -25,7 +25,7 @@ const {
   normalizeOrderFilter,
 } = require("./orderPresentation");
 
-export function OrderListScreen({ repository = demoOrderRepository }) {
+export function OrderListScreen({ repository = demoOrderRepository, realReception = false }) {
   const params = useLocalSearchParams();
   const { access } = useSession();
   const orderView = getOrderView(access.roles);
@@ -33,6 +33,16 @@ export function OrderListScreen({ repository = demoOrderRepository }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [state, setState] = useState({ status: "loading" });
+  const [nextCursor, setNextCursor] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [pageError, setPageError] = useState(false);
+  const firstFocus = useRef(true);
+
+  useFocusEffect(useCallback(() => {
+    if (!realReception) return;
+    if (firstFocus.current) firstFocus.current = false;
+    else setReloadKey((value) => value + 1);
+  }, [realReception]));
 
   useEffect(() => {
     setFilter(normalizeOrderFilter(params.filtro));
@@ -42,10 +52,13 @@ export function OrderListScreen({ repository = demoOrderRepository }) {
     let active = true;
     if (!refreshing) setState({ status: "loading" });
 
-    repository.loadList(orderView).then(
-      (orders) => {
+    const load = realReception ? repository.loadPage(orderView) : repository.loadList(orderView).then((orders) => ({ orders, cursor: null }));
+    load.then(
+      ({ orders, cursor }) => {
         if (active) {
           setState({ status: "success", orders });
+          setNextCursor(cursor);
+          setPageError(false);
           setRefreshing(false);
         }
       },
@@ -60,7 +73,7 @@ export function OrderListScreen({ repository = demoOrderRepository }) {
     return () => {
       active = false;
     };
-  }, [orderView, reloadKey, repository]);
+  }, [orderView, reloadKey, repository, realReception]);
 
   const visibleOrders = useMemo(
     () => filterOrders(state.status === "success" ? state.orders : [], filter),
@@ -71,6 +84,18 @@ export function OrderListScreen({ repository = demoOrderRepository }) {
     setRefreshing(true);
     setReloadKey((value) => value + 1);
   }, []);
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || loadingMore || state.status !== "success") return;
+    setLoadingMore(true);
+    try {
+      const page = await repository.loadPage(orderView, nextCursor);
+      setState((current) => current.status === "success"
+        ? { status: "success", orders: [...current.orders, ...page.orders] } : current);
+      setNextCursor(page.cursor);
+      setPageError(false);
+    } catch { setPageError(true); }
+    finally { setLoadingMore(false); }
+  }, [nextCursor, loadingMore, state.status, repository, orderView]);
 
   if (state.status === "loading") {
     return <SafeAreaView edges={["top", "right", "bottom", "left"]} style={styles.safeArea}><OrdersLoading /></SafeAreaView>;
@@ -92,10 +117,17 @@ export function OrderListScreen({ repository = demoOrderRepository }) {
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         keyExtractor={(order) => order.id}
         ListEmptyComponent={<OrdersEmpty filtered={filter !== ORDER_FILTERS.ALL} />}
-        ListFooterComponent={<Text style={styles.demoNotice}>Modo demostración · consulta solamente</Text>}
+        ListFooterComponent={realReception ? nextCursor ? <Pressable accessibilityRole="button"
+          disabled={loadingMore} onPress={loadMore} style={{ minHeight: 52, justifyContent: "center", alignItems: "center" }}>
+          <Text style={{ ...typography.bodyStrong, color: colors.primary }}>{loadingMore ? "Cargando…" : pageError ? "Error al cargar. Reintentar" : "Cargar más órdenes"}</Text>
+        </Pressable> : null : <Text style={styles.demoNotice}>Modo demostración · consulta solamente</Text>}
         ListHeaderComponent={(
           <View style={styles.headerContent}>
             <ProductHeader context="Supervisión de atenciones" title="Órdenes" />
+            {realReception ? <Pressable accessibilityRole="button" onPress={() => router.push("/interno/ordenes/nueva")}
+              style={{ minHeight: 52, justifyContent: "center", alignItems: "center", borderRadius: radii.md, backgroundColor: colors.primary }}>
+              <Text style={{ ...typography.bodyStrong, color: colors.onPrimary }}>Nueva recepción</Text>
+            </Pressable> : null}
             <View accessible accessibilityLabel={`${visibleOrders.length} órdenes en la vista actual`} style={styles.queueSummary}>
               <View style={styles.queueIcon}>
                 <MaterialCommunityIcons accessible={false} color={colors.primary} name="clipboard-text-outline" size={24} />

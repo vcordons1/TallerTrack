@@ -1,0 +1,11 @@
+{
+  "cli": { "version": ">= 16.0.0" },
+  "build": {
+    "demo": {
+      "environment": "preview",
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": { "TT_DEMO_LAN_HTTP": "1" }
+    }
+  }
+}

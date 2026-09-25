@@ -4,6 +4,7 @@ const SESSION_STATUS = Object.freeze({
   LOADING: "loading",
   UNAUTHENTICATED: "unauthenticated",
   AUTHENTICATED: "authenticated",
+  ERROR: "error",
 });
 
 const initialSessionState = Object.freeze({
@@ -57,6 +58,8 @@ function sessionReducer(state, event) {
       return { status: SESSION_STATUS.AUTHENTICATED, access: event.access };
     case "SESSION_CLEARED":
       return { status: SESSION_STATUS.UNAUTHENTICATED, access: null };
+    case "SESSION_ERROR":
+      return { status: SESSION_STATUS.ERROR, access: null };
     default:
       return state;
   }

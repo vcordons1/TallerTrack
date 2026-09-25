@@ -18,6 +18,7 @@ test("an administrator does not inherit operational workspaces", () => {
   assert.equal(capabilities.has(CAPABILITIES.AGENDA_WORKSPACE), true);
   assert.equal(capabilities.has(CAPABILITIES.MANAGEMENT_WORKSPACE), true);
   assert.equal(capabilities.has(CAPABILITIES.ORDERS_WORKSPACE), false);
+  assert.equal(capabilities.has(CAPABILITIES.RECEPTION_CREATE), false);
   assert.equal(capabilities.has(CAPABILITIES.INVENTORY_WORKSPACE), false);
 });
 
@@ -76,6 +77,12 @@ test("a mechanic only receives home and orders", () => {
   );
 
   assert.deepEqual(destinations, ["home", "orders"]);
+});
+
+test("only an explicit receptionist role can create reception", () => {
+  assert.equal(hasInternalCapability([ROLES.RECEPCIONISTA], CAPABILITIES.RECEPTION_CREATE), true);
+  assert.equal(hasInternalCapability([ROLES.ADMINISTRADOR, ROLES.RECEPCIONISTA], CAPABILITIES.RECEPTION_CREATE), true);
+  assert.equal(hasInternalCapability([ROLES.ADMINISTRADOR], CAPABILITIES.RECEPTION_CREATE), false);
 });
 
 test("authenticated actor type selects a separate shell", () => {
