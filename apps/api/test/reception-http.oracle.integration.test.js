@@ -27,6 +27,11 @@ async function jsonRequest(url, { token, body, idempotencyKey } = {}) {
   return { response, body: await response.json() };
 }
 
+async function getJson(url, token) {
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  return { response, body: await response.json() };
+}
+
 async function upload(url, token, bytes, context) {
   const form = new FormData();
   form.append("contexto", JSON.stringify(context));
@@ -87,12 +92,54 @@ test("login -> E01 -> O02 persists exact bytes and preserves auth, idempotency a
     assert.equal(login.response.status, 201);
     const token = login.body.data.tokens.accessToken;
     const actorId = login.body.data.acceso.usuarioId;
+    const customerSearch = await getJson(`${baseUrl}/interno/clientes?q=Cliente%20HTTP%200`, token);
+    assert.equal(customerSearch.response.status, 200);
+    assert.equal(customerSearch.body.data.length, 1);
+    const customer = customerSearch.body.data[0];
+    assert.equal(typeof customer.id, "string");
+    assert.deepEqual(Object.keys(customer).sort(), [
+      "accesoDigital", "activo", "direccion", "email", "id", "nit", "nombre", "telefono", "version",
+    ]);
+    assert.deepEqual((await getJson(`${baseUrl}/interno/clientes?q=%25%25`, token)).body.data, []);
+    assert.deepEqual((await getJson(`${baseUrl}/interno/clientes?q=__`, token)).body.data, []);
+
+    const vehicleSearch = await getJson(`${baseUrl}/interno/vehiculos?clienteId=${customer.id}`, token);
+    assert.equal(vehicleSearch.response.status, 200);
+    assert.equal(vehicleSearch.body.data.length, 1);
+    const searchedVehicle = vehicleSearch.body.data[0];
+    const vehicleDetail = await getJson(`${baseUrl}/interno/vehiculos/${searchedVehicle.id}`, token);
+    assert.equal(vehicleDetail.response.status, 200);
+    assert.deepEqual(vehicleDetail.body.data, searchedVehicle);
+
+    const pageOne = await getJson(`${baseUrl}/interno/clientes?limite=2`, token);
+    assert.equal(pageOne.response.status, 200);
+    assert.equal(pageOne.body.data.length, 2);
+    assert.equal(pageOne.body.page.hayMas, true);
+    const expectedCustomerOrder = await owner.execute(
+      "SELECT TO_CHAR(id_cliente) FROM cliente ORDER BY creado_en DESC,id_cliente DESC FETCH FIRST 2 ROWS ONLY",
+    );
+    assert.deepEqual(pageOne.body.data.map(({ id }) => id), expectedCustomerOrder.rows.map(([id]) => id));
+    await owner.execute(`INSERT INTO cliente(nombre,activo,creado_en,creado_por,actualizado_en,actualizado_por,version_fila)
+      VALUES('Cliente concurrente',1,SYSTIMESTAMP,:actor,SYSTIMESTAMP,:actor,1)`, { actor: actorId });
+    await owner.commit();
+    const pageTwo = await getJson(`${baseUrl}/interno/clientes?limite=2&cursor=${encodeURIComponent(pageOne.body.page.siguienteCursor)}`, token);
+    assert.equal(pageTwo.response.status, 200);
+    assert.equal(pageOne.body.data.some((firstRow) => pageTwo.body.data.some((secondRow) => secondRow.id === firstRow.id)), false);
+    const wrongCursorFilter = await getJson(`${baseUrl}/interno/clientes?limite=2&activo=false&cursor=${encodeURIComponent(pageOne.body.page.siguienteCursor)}`, token);
+    assert.equal(wrongCursorFilter.response.status, 400);
+    assert.equal(wrongCursorFilter.body.error.code, "CURSOR_INVALIDO");
+    const cursorParts = pageOne.body.page.siguienteCursor.split(".");
+    cursorParts[3] = `${cursorParts[3][0] === "A" ? "B" : "A"}${cursorParts[3].slice(1)}`;
+    const tamperedCursor = cursorParts.join(".");
+    assert.equal((await getJson(`${baseUrl}/interno/clientes?limite=2&cursor=${encodeURIComponent(tamperedCursor)}`, token)).response.status, 400);
+
     const bytes = await sharp({
       create: { width: 8, height: 6, channels: 3, background: { r: 25, g: 90, b: 150 } },
     }).png().toBuffer();
     const context = {
-      tipo: "RECEPCION_PREVIA", vehiculoId: "1000",
-      propiedadEsperadaId: "1100", propietarioEsperadoId: "200",
+      tipo: "RECEPCION_PREVIA", vehiculoId: searchedVehicle.id,
+      propiedadEsperadaId: searchedVehicle.propiedadActual.id,
+      propietarioEsperadoId: searchedVehicle.propiedadActual.clienteId,
     };
     const prepared = await upload(`${baseUrl}/interno/evidencias/cargar`, token, bytes, context);
     assert.equal(prepared.response.status, 201);
@@ -118,6 +165,20 @@ test("login -> E01 -> O02 persists exact bytes and preserves auth, idempotency a
     assert.equal(conflict.response.status, 409);
     assert.equal(conflict.body.error.code, "CLAVE_REUTILIZADA");
 
+    const orderList = await getJson(`${baseUrl}/interno/ordenes?vehiculoId=${searchedVehicle.id}`, token);
+    assert.equal(orderList.response.status, 200);
+    assert.equal(orderList.body.data.some(({ id }) => id === first.body.data.ordenId), true);
+    const orderDetail = await getJson(`${baseUrl}/interno/ordenes/${first.body.data.ordenId}`, token);
+    assert.equal(orderDetail.response.status, 200);
+    assert.equal(orderDetail.body.data.id, first.body.data.ordenId);
+    assert.equal(orderDetail.body.data.clienteContractual.id, customer.id);
+    assert.equal(orderDetail.body.data.propiedadAperturaId, context.propiedadEsperadaId);
+    assert.deepEqual(orderDetail.body.data.saldo, {
+      moneda: "GTQ", montoDebido: "0.00", pagadoValido: "0.00", saldoNeto: "0.00",
+      saldoPendiente: "0.00", saldoAFavor: "0.00", estadoEconomico: "SIN_CARGOS",
+      deudaVencida: false, entregadoEn: null, calculadoEn: orderDetail.body.data.saldo.calculadoEn,
+    });
+
     const facts = await owner.execute(`SELECT
       o.estado, o.id_propiedad_apertura, o.id_cliente,
       (SELECT COUNT(*) FROM orden_evento oe WHERE oe.id_orden=o.id_orden AND oe.tipo='APERTURA'),
@@ -127,8 +188,39 @@ test("login -> E01 -> O02 persists exact bytes and preserves auth, idempotency a
       (SELECT ap.clave_objeto FROM evidencia e JOIN archivo_privado ap ON ap.id_archivo=e.id_archivo
        WHERE e.id_orden=o.id_orden FETCH FIRST 1 ROW ONLY)
       FROM orden_trabajo o WHERE o.id_orden=:id`, { id: first.body.data.ordenId });
-    assert.deepEqual(facts.rows[0].slice(0, 7), ["RECIBIDO", 1100, 200, 1, 1, 1, 1]);
+    assert.deepEqual(facts.rows[0].slice(0, 7), [
+      "RECIBIDO", Number(context.propiedadEsperadaId), Number(customer.id), 1, 1, 1, 1,
+    ]);
     assert.deepEqual(await readAll(await runtime.privateFileStorage.openObject(facts.rows[0][7])), bytes);
+
+    const destinationSearch = await getJson(`${baseUrl}/interno/clientes?q=Cliente%20HTTP%201`, token);
+    assert.equal(destinationSearch.response.status, 200);
+    const destination = destinationSearch.body.data[0];
+    const transfer = await owner.execute(`BEGIN pkg_vehiculos.transferir_propiedad(
+      :scope,:key,:requestHash,:actor,NULL,:correlation,:vehicleId,:propertyId,:ownerId,:newOwnerId,
+      'Transferencia real TT-022',:qrHash,NULL,:previousProperty,:newProperty,:qrId,:repeated
+    ); END;`, {
+      scope: `actor:${actorId}/TT022`, key: randomUUID(), requestHash: createHash("sha256").update(randomUUID()).digest(),
+      actor: actorId, correlation: randomUUID(), vehicleId: searchedVehicle.id,
+      propertyId: context.propiedadEsperadaId, ownerId: customer.id, newOwnerId: destination.id,
+      qrHash: createHash("sha256").update(randomUUID()).digest(),
+      previousProperty: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 40 },
+      newProperty: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 40 },
+      qrId: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 40 },
+      repeated: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+    }, { autoCommit: false });
+    await owner.commit();
+    assert.equal(transfer.outBinds.previousProperty, context.propiedadEsperadaId);
+    const oldOwnerVehicles = await getJson(`${baseUrl}/interno/vehiculos?clienteId=${customer.id}`, token);
+    assert.equal(oldOwnerVehicles.body.data.some(({ id }) => id === searchedVehicle.id), false);
+    const newOwnerVehicles = await getJson(`${baseUrl}/interno/vehiculos?clienteId=${destination.id}`, token);
+    assert.equal(newOwnerVehicles.body.data.some(({ id }) => id === searchedVehicle.id), true);
+    const transferredVehicle = await getJson(`${baseUrl}/interno/vehiculos/${searchedVehicle.id}`, token);
+    assert.equal(transferredVehicle.body.data.propiedadActual.clienteId, destination.id);
+    assert.equal(transferredVehicle.body.data.propiedadActual.id, transfer.outBinds.newProperty);
+    const historicalOrder = await getJson(`${baseUrl}/interno/ordenes/${first.body.data.ordenId}`, token);
+    assert.equal(historicalOrder.body.data.clienteContractual.id, customer.id);
+    assert.equal(historicalOrder.body.data.propiedadAperturaId, context.propiedadEsperadaId);
 
     const raceContext = {
       tipo: "RECEPCION_PREVIA", vehiculoId: "1001",
@@ -144,6 +236,28 @@ test("login -> E01 -> O02 persists exact bytes and preserves auth, idempotency a
     assert.equal(race.find(({ response }) => response.status === 409).body.error.code, "ORDEN_ACTIVA_EXISTENTE");
     const raceCount = await owner.execute("SELECT COUNT(*) FROM orden_trabajo WHERE id_vehiculo=1001");
     assert.equal(raceCount.rows[0][0], 1);
+    const otherOrderId = race.find(({ response }) => response.status === 201).body.data.ordenId;
+    const firstOrderPage = await getJson(`${baseUrl}/interno/ordenes?limite=1`, token);
+    assert.equal(firstOrderPage.response.status, 200);
+    assert.equal(firstOrderPage.body.data.length, 1);
+    assert.equal(firstOrderPage.body.page.hayMas, true);
+    const secondOrderPage = await getJson(`${baseUrl}/interno/ordenes?limite=1&cursor=${encodeURIComponent(firstOrderPage.body.page.siguienteCursor)}`, token);
+    assert.equal(secondOrderPage.response.status, 200);
+    assert.equal(secondOrderPage.body.data.length, 1);
+    const expectedOrder = await owner.execute(
+      "SELECT TO_CHAR(id_orden) FROM orden_trabajo ORDER BY ingresado_en DESC,id_orden DESC",
+    );
+    assert.deepEqual([firstOrderPage.body.data[0].id, secondOrderPage.body.data[0].id],
+      expectedOrder.rows.map(([id]) => id));
+    assert.deepEqual(new Set(expectedOrder.rows.map(([id]) => id)), new Set([first.body.data.ordenId, otherOrderId]));
+    assert.equal(secondOrderPage.body.page.hayMas, false);
+    assert.equal(secondOrderPage.body.page.siguienteCursor, null);
+    const wrongOrderCursor = await getJson(`${baseUrl}/interno/ordenes?limite=1&estado=ENTREGADO&cursor=${encodeURIComponent(firstOrderPage.body.page.siguienteCursor)}`, token);
+    assert.equal(wrongOrderCursor.response.status, 400);
+    assert.equal(wrongOrderCursor.body.error.code, "CURSOR_INVALIDO");
+    const emptyOrders = await getJson(`${baseUrl}/interno/ordenes?estado=ENTREGADO`, token);
+    assert.deepEqual(emptyOrders.body.data, []);
+    assert.deepEqual(emptyOrders.body.page, { siguienteCursor: null, hayMas: false });
 
     const guardedContext = {
       tipo: "RECEPCION_PREVIA", vehiculoId: "1002",
@@ -184,6 +298,8 @@ test("login -> E01 -> O02 persists exact bytes and preserves auth, idempotency a
     await owner.execute(`UPDATE usuario_rol SET retirado_en=SYSTIMESTAMP, retirado_por=id_usuario,
       motivo_retiro='HTTP live-role test' WHERE id_usuario=:id AND codigo_rol='RECEPCIONISTA' AND retirado_en IS NULL`,
     { id: actorId });
+    await owner.execute(`INSERT INTO usuario_rol(id_usuario,codigo_rol,asignado_en,asignado_por)
+      VALUES(:id,'MECANICO',SYSTIMESTAMP,:id)`, { id: actorId });
     await owner.commit();
     assert.ok([401, 403].includes(
       (await upload(`${baseUrl}/interno/evidencias/cargar`, token, bytes, raceContext)).response.status,
@@ -191,9 +307,65 @@ test("login -> E01 -> O02 persists exact bytes and preserves auth, idempotency a
     assert.ok([401, 403].includes((await jsonRequest(`${baseUrl}/interno/ordenes/abrir`, {
       token, idempotencyKey: randomUUID(), body: raceBody,
     })).response.status));
+    assert.equal((await getJson(`${baseUrl}/interno/clientes`, token)).response.status, 403);
+    assert.equal((await getJson(`${baseUrl}/interno/vehiculos`, token)).response.status, 403);
+    assert.equal((await getJson(`${baseUrl}/interno/vehiculos/${searchedVehicle.id}`, token)).response.status, 403);
+
+    const mechanicOrders = await getJson(`${baseUrl}/interno/ordenes`, token);
+    assert.equal(mechanicOrders.response.status, 200);
+    assert.deepEqual(mechanicOrders.body.data, []);
+    assert.equal((await getJson(`${baseUrl}/interno/ordenes/${first.body.data.ordenId}`, token)).response.status, 404);
+    await owner.execute(`INSERT INTO orden_mecanico(id_orden,id_mecanico,asignado_en,asignado_por)
+      VALUES(:orderId,:actorId,SYSTIMESTAMP,:actorId)`, { orderId: first.body.data.ordenId, actorId });
+    await owner.commit();
+    const assignedOrders = await getJson(`${baseUrl}/interno/ordenes`, token);
+    assert.equal(assignedOrders.response.status, 200);
+    assert.deepEqual(assignedOrders.body.data.map(({ id }) => id), [first.body.data.ordenId]);
+    assert.equal("clienteContractual" in assignedOrders.body.data[0], false);
+    assert.equal("saldo" in assignedOrders.body.data[0], false);
+    const assignedDetail = await getJson(`${baseUrl}/interno/ordenes/${first.body.data.ordenId}`, token);
+    assert.equal(assignedDetail.response.status, 200);
+    assert.equal("clienteContractual" in assignedDetail.body.data, false);
+    assert.equal((await getJson(`${baseUrl}/interno/ordenes/${otherOrderId}`, token)).response.status, 404);
+    await owner.execute(`UPDATE orden_mecanico SET retirado_en=SYSTIMESTAMP, retirado_por=:actorId,
+      motivo_retiro='Retiro de prueba TT-022' WHERE id_orden=:orderId AND id_mecanico=:actorId AND retirado_en IS NULL`,
+    { orderId: first.body.data.ordenId, actorId });
+    await owner.commit();
+    assert.equal((await getJson(`${baseUrl}/interno/ordenes/${first.body.data.ordenId}`, token)).response.status, 404);
+
+    await owner.execute(`UPDATE usuario_rol SET retirado_en=SYSTIMESTAMP, retirado_por=:id, motivo_retiro='Cambio de prueba'
+      WHERE id_usuario=:id AND codigo_rol='MECANICO' AND retirado_en IS NULL`, { id: actorId });
+    await owner.execute(`INSERT INTO usuario_rol(id_usuario,codigo_rol,asignado_en,asignado_por)
+      VALUES(:id,'INVENTARIO',SYSTIMESTAMP,:id)`, { id: actorId });
+    await owner.commit();
+    assert.equal((await getJson(`${baseUrl}/interno/clientes`, token)).response.status, 403);
+    assert.equal((await getJson(`${baseUrl}/interno/vehiculos`, token)).response.status, 403);
+    assert.equal((await getJson(`${baseUrl}/interno/vehiculos/${searchedVehicle.id}`, token)).response.status, 403);
+    const inventoryOrders = await getJson(`${baseUrl}/interno/ordenes`, token);
+    assert.equal(inventoryOrders.response.status, 200);
+    const inventoryOrder = inventoryOrders.body.data.find(({ id }) => id === first.body.data.ordenId);
+    assert.deepEqual(Object.keys(inventoryOrder).sort(), ["detencion", "estado", "id", "proposito", "version"]);
+
+    await owner.execute(`UPDATE usuario_rol SET retirado_en=SYSTIMESTAMP, retirado_por=:id, motivo_retiro='Cambio de prueba'
+      WHERE id_usuario=:id AND codigo_rol='INVENTARIO' AND retirado_en IS NULL`, { id: actorId });
+    await owner.execute(`INSERT INTO usuario_rol(id_usuario,codigo_rol,asignado_en,asignado_por)
+      VALUES(:id,'ADMINISTRADOR',SYSTIMESTAMP,:id)`, { id: actorId });
+    await owner.commit();
+    assert.equal((await getJson(`${baseUrl}/interno/clientes`, token)).response.status, 200);
+    assert.equal((await getJson(`${baseUrl}/interno/vehiculos`, token)).response.status, 200);
+    assert.equal((await getJson(`${baseUrl}/interno/vehiculos/${searchedVehicle.id}`, token)).response.status, 200);
+    assert.equal((await getJson(`${baseUrl}/interno/ordenes/${first.body.data.ordenId}`, token)).response.status, 200);
+
+    await owner.execute(`UPDATE usuario_rol SET retirado_en=SYSTIMESTAMP, retirado_por=:id, motivo_retiro='Cambio de prueba'
+      WHERE id_usuario=:id AND codigo_rol='ADMINISTRADOR' AND retirado_en IS NULL`, { id: actorId });
     await owner.execute(`INSERT INTO usuario_rol(id_usuario,codigo_rol,asignado_en,asignado_por)
       VALUES(:id,'RECEPCIONISTA',SYSTIMESTAMP,:id)`, { id: actorId });
     await owner.commit();
+
+    await owner.execute(`UPDATE sesion SET revocada_en=SYSTIMESTAMP, motivo_revocacion='Consulta revocada TT-022'
+      WHERE id_usuario=:id AND revocada_en IS NULL`, { id: actorId });
+    await owner.commit();
+    assert.equal((await getJson(`${baseUrl}/interno/clientes`, token)).response.status, 401);
 
     const serializedLogs = JSON.stringify(logs);
     for (const secret of [token, login.body.data.tokens.refreshToken, prepared.body.data.recibo,

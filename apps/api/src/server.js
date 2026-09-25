@@ -22,6 +22,9 @@ import { createIdentityService } from "./modules/identity/identity-service.js";
 import { createOracleIdentityRepository } from "./modules/identity/oracle-identity-repository.js";
 import { createPasswordService } from "./modules/identity/passwords.js";
 import { createTokenService } from "./modules/identity/tokens.js";
+import { createOpaqueCursorCodec } from "./platform/operational-query-contract.js";
+import { createOracleCustomerVehicleQueries } from "./modules/customers-vehicles/oracle-customer-vehicle-queries.js";
+import { createOracleOrderQueries } from "./modules/service-orders/oracle-order-queries.js";
 
 function listen(app, port) {
   return new Promise((resolve, reject) => {
@@ -93,6 +96,9 @@ export async function startServer({
     maximumFiles: privateFileConfig.maxFilesPerOperation,
     driver,
   });
+  const customerVehicleQueries = createOracleCustomerVehicleQueries({ poolManager, schema: config.schema, driver });
+  const orderQueries = createOracleOrderQueries({ poolManager, schema: config.schema, driver });
+  const cursorCodec = createOpaqueCursorCodec({ hmacKey: authConfig.signingKey });
 
   let server;
   try {
@@ -103,6 +109,9 @@ export async function startServer({
       preparedUpload,
       openCommercialOrder,
       privateFileConfig,
+      customerVehicleQueries,
+      orderQueries,
+      cursorCodec,
       logger,
     }), port);
   } catch (error) {

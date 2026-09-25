@@ -22,7 +22,8 @@ $environmentNames = @(
     'TT_DB_URL','TT_DB_USER','TT_DB_PASSWORD','TT_RUN_AUTH_ORACLE_INTEGRATION','TT_RUN_RECEPTION_HTTP_ORACLE_INTEGRATION',
     'TT_ORACLE_USER','TT_ORACLE_PASSWORD','TT_ORACLE_CONNECT_STRING','TT_ORACLE_SCHEMA',
     'TT_ORACLE_EXPECTED_DATABASE','TT_ORACLE_EXPECTED_SERVICE','TT_ORACLE_POOL_MIN','TT_ORACLE_POOL_MAX','TT_ORACLE_POOL_INCREMENT',
-    'TT_AUTH_TEST_OWNER','TT_AUTH_TEST_OWNER_PASSWORD','TT_AUTH_TEST_LOGIN','TT_AUTH_TEST_PASSWORD'
+    'TT_AUTH_TEST_OWNER','TT_AUTH_TEST_OWNER_PASSWORD','TT_AUTH_TEST_LOGIN','TT_AUTH_TEST_PASSWORD',
+    'TT_BOOTSTRAP_ORACLE_USER','TT_BOOTSTRAP_ORACLE_SCHEMA','TT_BOOTSTRAP_ORACLE_PASSWORD','TT_BOOTSTRAP_ORACLE_CONNECT_STRING'
 )
 foreach ($name in $environmentNames) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
 
@@ -89,6 +90,26 @@ select 'HASHED='||case when credencial_hash like '`$argon2id`$v=19`$m=65536,p=1,
         throw "Unexpected bootstrap evidence: $bootstrapEvidence"
     }
 
+    $env:TT_BOOTSTRAP_ORACLE_USER = $owner
+    $env:TT_BOOTSTRAP_ORACLE_SCHEMA = $owner
+    $env:TT_BOOTSTRAP_ORACLE_PASSWORD = $ownerPassword
+    $env:TT_BOOTSTRAP_ORACLE_CONNECT_STRING = '127.0.0.1:1521/XEPDB1'
+    $demoOutput = & node apps/api/scripts/bootstrap-demo-reception.js 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0 -or $demoOutput -notmatch 'Escenario creado: cliente=\d+;.*vehiculo=\d+; propiedad=\d+') {
+        throw "Demo reception bootstrap did not create a valid scenario: $demoOutput"
+    }
+    $demoReplay = & node apps/api/scripts/bootstrap-demo-reception.js 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0 -or $demoReplay -notmatch 'Escenario listo: cliente=\d+;.*vehiculo=\d+; propiedad=\d+') {
+        throw "Demo reception bootstrap did not recognize an existing scenario: $demoReplay"
+    }
+    $demoEvidence = Invoke-OwnerSql @"
+select 'DEMO='||count(*) from cliente c join propiedad_vehiculo p on p.id_cliente=c.id_cliente and p.hasta_en is null
+ join vehiculo v on v.id_vehiculo=p.id_vehiculo and v.activo=1 join qr_token q on q.id_vehiculo=v.id_vehiculo and q.revocado_en is null
+ where c.nit='DEMO-TT022' and c.activo=1 and not exists
+ (select 1 from orden_trabajo o where o.id_vehiculo=v.id_vehiculo and o.estado not in ('ENTREGADO','ENTREGADO_SIN_REPARACION','CANCELADO'));
+"@
+    if ($demoEvidence -notmatch 'DEMO=1') { throw "Demo reception bootstrap scenario is invalid: $demoEvidence" }
+
     Invoke-OwnerSql @"
 declare l_actor number; begin
   select id_usuario into l_actor from usuario where login_normalizado='$login';
@@ -101,6 +122,8 @@ declare l_actor number; begin
       values(1000+i,'AUTOMOVIL','Marca HTTP','Modelo '||i,1,systimestamp,l_actor,systimestamp,l_actor,1);
     insert into propiedad_vehiculo(id_propiedad,id_vehiculo,id_cliente,desde_en,motivo,registrado_por,id_comando)
       values(1100+i,1000+i,200+i,systimestamp-interval '1' day,'Propiedad HTTP',l_actor,9000);
+    insert into qr_token(id_qr,id_vehiculo,token_hash,emitido_en,emitido_por,id_comando)
+      values(1200+i,1000+i,standard_hash('HTTP-QR-'||i,'SHA256'),systimestamp-interval '1' day,l_actor,9000);
   end loop;
   commit;
 end;
@@ -174,9 +197,10 @@ select 'DIRECT_DML='||count(*) from dba_tab_privs where owner='$owner' and grant
     }
 
     Write-Output 'PASS bootstrap: owner-only tool created one real internal RECEPCIONISTA with Argon2id and exact roles; injected role failure rolled back user and roles.'
+    Write-Output 'PASS demo bootstrap: explicit owner-only tool created a client, vehicle, current property and QR through T24, then recognized the same eligible scenario.'
     Write-Output 'PASS least privilege: TT_APP executes PKG_IDENTIDAD, cannot execute bootstrap, and has no direct identity DML.'
     Write-Output 'PASS auth HTTP/Oracle: I01-I04, live roles, rotation, reuse-family revocation, two-connection race, logout and deactivation.'
-    Write-Output 'PASS reception HTTP/Oracle: login, bounded photo upload, receipt, T01 opening, exact bytes, replay/conflict, live-role withdrawal and concurrent O02.'
+    Write-Output 'PASS reception/query HTTP/Oracle: login, C01/V01/V03 discovery, bounded photo upload, O02, O01/O03, exact bytes, T10 ownership history, keyset cursors, live A/R/M/I roles, revoked session and concurrent O02.'
     Write-Output "ORACLE_EVIDENCE $($bootstrapEvidence -replace '\s+',' ') $($grants -replace '\s+',' ')"
 }
 catch { $failure = $_ }

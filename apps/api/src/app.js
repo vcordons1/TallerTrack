@@ -2,6 +2,7 @@ import express from "express";
 
 import { apiErrorHandler, createIdentityHttp, requestContext } from "./modules/identity/identity-http.js";
 import { createReceptionHttp } from "./modules/reception/reception-http.js";
+import { createOperationalQueryHttp } from "./modules/operational-query-http.js";
 
 export function createApp({
   checkReadiness = async () => false,
@@ -9,6 +10,9 @@ export function createApp({
   preparedUpload,
   openCommercialOrder,
   privateFileConfig,
+  customerVehicleQueries,
+  orderQueries,
+  cursorCodec,
   logger,
 } = {}) {
   const app = express();
@@ -35,6 +39,14 @@ export function createApp({
 
   if (identityService !== undefined) {
     const identityHttp = createIdentityHttp({ identityService });
+    if (customerVehicleQueries !== undefined || orderQueries !== undefined || cursorCodec !== undefined) {
+      app.use("/api/v1", createOperationalQueryHttp({
+        requireAuthenticated: identityHttp.requireAuthenticated,
+        customerVehicleQueries,
+        orderQueries,
+        cursorCodec,
+      }).router);
+    }
     if (preparedUpload !== undefined || openCommercialOrder !== undefined) {
       app.use("/api/v1", createReceptionHttp({
         identityService,

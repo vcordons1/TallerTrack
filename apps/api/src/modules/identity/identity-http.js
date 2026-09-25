@@ -4,6 +4,7 @@ import express from "express";
 
 import { IdentityError } from "./identity-service.js";
 import { parseStrictJsonObject } from "../../platform/strict-json.js";
+import { OperationalQueryError } from "../../platform/operational-query-contract.js";
 
 function exactProperties(value, required, optional = []) {
   const keys = Object.keys(value);
@@ -131,6 +132,11 @@ export function apiErrorHandler(error, request, response, _next, logger = consol
       : status === 403 ? "La acción no está permitida." : status === 400
         ? "La solicitud no es válida." : "No fue posible validar el acceso.";
     recovery = status === 401 ? "REAUTENTICAR" : status === 429 ? "ESPERAR" : "CORREGIR";
+  } else if (error instanceof OperationalQueryError) {
+    code = error.code;
+    status = code === "RECURSO_NO_ENCONTRADO" ? 404 : 400;
+    message = status === 404 ? "El recurso no existe o no está disponible." : "La solicitud no es válida.";
+    recovery = status === 404 ? "NINGUNA" : "CORREGIR";
   } else if (error?.type === "entity.too.large") {
     status = 413;
     code = "LIMITE_SOLICITUD_EXCEDIDO";
@@ -165,6 +171,11 @@ export function apiErrorHandler(error, request, response, _next, logger = consol
     message = "No fue posible validar el acceso.";
     recovery = "REAUTENTICAR";
   } else if (error?.code === "ROL_RECEPCIONISTA_REQUERIDO") {
+    status = 403;
+    code = "ACCION_NO_PERMITIDA";
+    message = "La acción no está permitida.";
+    recovery = "CORREGIR";
+  } else if (error?.code === "ROL_RECEPCION_REQUERIDO" || error?.code === "ROL_CONSULTA_REQUERIDO") {
     status = 403;
     code = "ACCION_NO_PERMITIDA";
     message = "La acción no está permitida.";

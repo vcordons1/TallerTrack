@@ -14,6 +14,7 @@
     "db:info": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/scripts/invoke-flyway.ps1 info",
     "db:validate": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/scripts/invoke-flyway.ps1 validate",
     "bootstrap:internal-user": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/scripts/bootstrap-internal-user.ps1",
+    "bootstrap:demo-reception": "node apps/api/scripts/bootstrap-demo-reception.js",
     "test:db:foundation": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/tests/foundation.integration.ps1",
     "test:db:i02": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/tests/i02.integration.ps1",
     "test:db:i03": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/tests/i03.integration.ps1",
