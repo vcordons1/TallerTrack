@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import test from "node:test";
 
 import sharp from "sharp";
@@ -11,6 +13,7 @@ import { createPreparedPrivateUpload } from "../src/platform/prepared-private-up
 import { createPrivateFileStorage } from "../src/platform/private-file-storage.js";
 import { createTechnicalImageValidator } from "../src/platform/technical-image-validator.js";
 import { createUploadReceiptSigner } from "../src/platform/upload-receipt.js";
+import photoUpload from "../../mobile/src/features/reception/photoUpload.cjs";
 
 const receptionistToken = "recepcion.a.a";
 const administratorToken = "admin.a.a";
@@ -103,6 +106,44 @@ async function upload(baseUrl, form, token = receptionistToken) {
     body: form,
   });
 }
+
+test("picker URI multipart reaches real E01 with the original JPEG and PNG bytes", async (t) => {
+  const { baseUrl, root } = await harness(t);
+  const cameraCache = await mkdtemp(path.join(os.tmpdir(), "tallertrack-picker-"));
+  t.after(() => rm(cameraCache, { recursive: true, force: true }));
+  class NativeFormData {
+    parts = [];
+    append(name, value) { this.parts.push([name, value]); }
+  }
+  class NativeFile {
+    constructor(uri) {
+      this.uri = uri;
+      this.name = path.basename(fileURLToPath(uri));
+      this.type = this.name.endsWith(".png") ? "image/png" : "image/jpeg";
+    }
+    async bytes() { return readFile(fileURLToPath(this.uri)); }
+  }
+  for (const [format, mimeType] of [["jpeg", "image/jpeg"], ["png", "image/png"]]) {
+    const bytes = await sharp({ create: { width: 7, height: 5, channels: 3,
+      background: { r: 20, g: 80, b: 140 } } })[format]().toBuffer();
+    const filePath = path.join(cameraCache, `picker.${format}`);
+    await writeFile(filePath, bytes);
+    const native = photoUpload.createUploadForm({ uri: pathToFileURL(filePath).href, mimeType },
+      context(), NativeFile, NativeFormData);
+    const wire = new FormData();
+    for (const [name, value] of native.parts) {
+      if (typeof value === "string") wire.append(name, value);
+      else wire.append(name, new Blob([await value.bytes()], { type: value.type }), value.name);
+    }
+    const response = await upload(baseUrl, wire);
+    assert.equal(response.status, 201);
+    const payload = await response.json();
+    assert.equal(payload.data.tipoContenido, mimeType);
+    assert.equal(payload.data.tamanoBytes, String(bytes.length));
+    assert.equal(payload.data.sha256, createHash("sha256").update(bytes).digest("hex"));
+  }
+  assert.equal((await readdir(root)).length, 2);
+});
 
 test("E01 requires live RECEPCIONISTA auth and returns only canonical public metadata", async (t) => {
   const { baseUrl, root } = await harness(t);

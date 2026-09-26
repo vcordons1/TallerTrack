@@ -1,4 +1,7 @@
 import { api } from "../../api/runtime";
+import { File } from "expo-file-system";
+
+const { createUploadForm } = require("./photoUpload.cjs");
 
 function query(path, params) {
   const url = new URLSearchParams(params);
@@ -17,14 +20,13 @@ export const receptionRepository = Object.freeze({
   },
   async getVehicle(id) { return (await api.request(`/interno/vehiculos/${encodeURIComponent(id)}`)).data; },
   async upload(photo, context) {
-    const form = new FormData();
-    form.append("contexto", JSON.stringify({ tipo: "RECEPCION_PREVIA", ...context }));
-    form.append("archivo", { uri: photo.uri, name: "recepcion.jpg", type: photo.mimeType || "image/jpeg" });
-    return (await api.request("/interno/evidencias/cargar", { method: "POST", body: form })).data.recibo;
+    return (await api.request("/interno/evidencias/cargar", {
+      method: "POST", body: createUploadForm(photo, context, File),
+    })).data.recibo;
   },
   async open(body, key) {
     return (await api.request("/interno/ordenes/abrir", {
-      method: "POST", body, headers: { "Idempotency-Key": key },
+      method: "POST", body, headers: { "Idempotency-Key": key }, uncertainBusinessResult: true,
     })).data;
   },
   async getOrder(id) { return (await api.request(`/interno/ordenes/${encodeURIComponent(id)}?vista=RECEPCION`)).data; },

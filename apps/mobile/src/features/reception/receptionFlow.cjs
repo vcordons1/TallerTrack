@@ -42,7 +42,16 @@ function createReceptionFlow({ repository, uuid }) {
         if (!pending && !confirmedOrderId) {
           const input = validateReception({ kilometrajeIngreso, motivoIngreso, danosVisibles, photo });
           const current = assertCurrentVehicle(await repository.getVehicle(vehicleId), customerId);
-          const receipt = await repository.upload(photo, current);
+          let receipt;
+          try { receipt = await repository.upload(photo, current); }
+          catch (error) {
+            error.receptionStep = "E01";
+            if (error.status !== undefined) console.warn("E01 upload failed", {
+              status: error.status, code: error.code ?? null,
+              requestId: error.requestId ?? null, transportCause: error.transportCause ?? null,
+            });
+            throw error;
+          }
           const body = {
             ...current,
             kilometrajeIngreso: input.km,

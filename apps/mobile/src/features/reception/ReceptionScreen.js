@@ -9,6 +9,8 @@ import { colors, radii, spacing, typography } from "../../theme/tokens";
 import { receptionRepository } from "./receptionRepository";
 
 const { createReceptionFlow, assertCurrentVehicle } = require("./receptionFlow.cjs");
+const { createReceptionPhoto } = require("./photoUpload.cjs");
+const { receptionMessage } = require("./receptionMessage.cjs");
 
 function Action({ label, onPress, secondary = false, disabled = false }) {
   return <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled}
@@ -106,10 +108,11 @@ export function ReceptionScreen() {
         : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
       if (!result.canceled && result.assets?.[0]?.uri) {
         const asset = result.assets[0];
-        setPhoto({ uri: asset.uri, mimeType: asset.mimeType || "image/jpeg" });
+        setPhoto(createReceptionPhoto(asset));
         flow.reset();
       }
-    } catch { setError("No se pudo preparar la fotografía. Intenta de nuevo."); }
+    } catch (failure) { setError(failure.code === "PHOTO_FORMAT_UNSUPPORTED"
+      ? failure.message : "No se pudo preparar la fotografía. Intenta de nuevo."); }
   }
 
   async function submit() {
@@ -187,22 +190,6 @@ export function ReceptionScreen() {
       </> : error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     </KeyboardAvoidingView>
   </ScreenContainer>;
-}
-
-function receptionMessage(error) {
-  const messages = {
-    PROPIEDAD_CAMBIADA: "La propiedad del vehículo cambió. Vuelve a seleccionar el vehículo.",
-    ORDEN_ACTIVA_EXISTENTE: "Este vehículo ya tiene una atención activa.",
-    DEUDA_NO_VERIFICABLE: "No se puede abrir la recepción. Se requiere revisión administrativa.",
-    EVIDENCIA_NO_APLICABLE: "La fotografía preparada ya no es válida. Prepárala de nuevo.",
-    EVIDENCIA_REQUERIDA: "Prepara nuevamente la fotografía de recepción.",
-  };
-  if (messages[error.code]) return messages[error.code];
-  if (error.status === 413) return "La fotografía es demasiado grande. Toma otra con menor resolución.";
-  if (error.status === 415) return "El formato de la fotografía no es admitido. Usa JPEG o PNG.";
-  if (error.status === 403) return "Tu acceso ya no permite crear recepciones.";
-  if (error.uncertain) return "No se confirmó el resultado. Pulsa verificar para reintentar esta misma orden.";
-  return error.status ? "No se pudo completar la recepción. Revisa los datos y vuelve a intentar." : error.message;
 }
 
 const styles = StyleSheet.create({

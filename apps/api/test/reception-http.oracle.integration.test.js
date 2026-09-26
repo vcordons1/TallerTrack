@@ -8,6 +8,9 @@ import test from "node:test";
 
 import oracledb from "oracledb";
 import sharp from "sharp";
+import mobileClient from "../../mobile/src/api/client.cjs";
+import mobileFlow from "../../mobile/src/features/reception/receptionFlow.cjs";
+import photoUpload from "../../mobile/src/features/reception/photoUpload.cjs";
 
 import { startServer } from "../src/server.js";
 
@@ -146,14 +149,67 @@ test("login -> E01 -> O02 persists exact bytes and preserves auth, idempotency a
     assert.equal(prepared.body.data.sha256, createHash("sha256").update(bytes).digest("hex"));
 
     const key = randomUUID();
-    const first = await jsonRequest(`${baseUrl}/interno/ordenes/abrir`, {
-      token, idempotencyKey: key, body: opening(context, prepared.body.data.recibo),
+    let sentBody;
+    let first;
+    const client = mobileClient.createApiClient({
+      baseUrl, fetchImpl: fetch,
+      store: {
+        read: async () => login.body.data.tokens,
+        write: async () => {}, clear: async () => {},
+      },
     });
+    await client.restore();
+    const mobileReception = mobileFlow.createReceptionFlow({
+      uuid: () => key,
+      repository: {
+        async getVehicle(id) {
+          return (await client.request(`/interno/vehiculos/${id}`)).data;
+        },
+        async upload(photo, uploadContext) {
+          class NativeFormData {
+            parts = [];
+            append(name, value) { this.parts.push([name, value]); }
+          }
+          class NativeFile {
+            constructor(uri) {
+              this.name = uri.split("/").at(-1);
+              this.type = "image/png";
+            }
+            async bytes() { return photo.bytes; }
+          }
+          const native = photoUpload.createUploadForm(photo, uploadContext, NativeFile, NativeFormData);
+          const form = new FormData();
+          for (const [name, value] of native.parts) {
+            if (typeof value === "string") form.append(name, value);
+            else form.append(name, new Blob([await value.bytes()], { type: value.type }), value.name);
+          }
+          return (await client.request("/interno/evidencias/cargar", { method: "POST", body: form })).data.recibo;
+        },
+        async open(body, idempotencyKey) {
+          sentBody = body;
+          first = await client.request("/interno/ordenes/abrir", {
+            method: "POST", body, headers: { "Idempotency-Key": idempotencyKey },
+            uncertainBusinessResult: true,
+          });
+          return first.data;
+        },
+        async getOrder(id) {
+          return (await client.request(`/interno/ordenes/${id}?vista=RECEPCION`)).data;
+        },
+      },
+    });
+    const confirmedDetail = await mobileReception.submit({
+      customerId: customer.id, vehicleId: searchedVehicle.id, kilometrajeIngreso: "321.0",
+      motivoIngreso: "Recepción HTTP Oracle", danosVisibles: "Sin daños visibles",
+      photo: { uri: "file:///camera.png", bytes },
+    });
+    assert.equal(confirmedDetail.id, first.data.ordenId);
+    first = { response: { status: 201 }, body: first };
     assert.equal(first.response.status, 201);
     assert.equal(first.body.data.estado, "RECIBIDO");
     assert.equal(first.body.meta.repetido, false);
     const replay = await jsonRequest(`${baseUrl}/interno/ordenes/abrir`, {
-      token, idempotencyKey: key, body: opening(context, prepared.body.data.recibo),
+      token, idempotencyKey: key, body: sentBody,
     });
     assert.equal(replay.response.status, 201);
     assert.equal(replay.body.data.ordenId, first.body.data.ordenId);

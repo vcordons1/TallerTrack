@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createReceptionFlow } = require("../src/features/reception/receptionFlow.cjs");
+const { receptionMessage } = require("../src/features/reception/receptionMessage.cjs");
 
 const vehicle = { id: "7", activo: true, ordenActivaId: null,
   propiedadActual: { id: "9", clienteId: "5" } };
@@ -58,9 +59,30 @@ test("failed evidence upload never opens an order", async () => {
     async upload() { throw new Error("upload failed"); },
     async open() { opened = true; },
   } });
-  await assert.rejects(() => flow.submit(input), /upload failed/);
+  await assert.rejects(() => flow.submit(input), (error) =>
+    error.message === "upload failed" && error.receptionStep === "E01"
+      && receptionMessage(error) === "No se pudo cargar la fotografía. Comprueba la conexión y vuelve a intentar.");
   assert.equal(opened, false);
   assert.equal(flow.hasPending, false);
+});
+
+test("confirmed O02 rejection clears pending and a new submit prepares a new receipt", async () => {
+  let uploads = 0;
+  const keys = [];
+  const flow = createReceptionFlow({ uuid: () => `key-${uploads}`, repository: {
+    async getVehicle() { return vehicle; },
+    async upload() { uploads += 1; return `receipt-${uploads}`; },
+    async open(body, key) {
+      keys.push([body.evidenciasRecepcion[0].recibo, key]);
+      if (uploads === 1) throw Object.assign(new Error("rejected"), { uncertain: false });
+      return { ordenId: "10" };
+    },
+    async getOrder(id) { return { id }; },
+  } });
+  await assert.rejects(() => flow.submit(input), /rejected/);
+  assert.equal(flow.hasPending, false);
+  assert.deepEqual(await flow.submit(input), { id: "10" });
+  assert.deepEqual(keys, [["receipt-1", "key-1"], ["receipt-2", "key-2"]]);
 });
 
 test("two simultaneous submits create one server order with verified context", async () => {

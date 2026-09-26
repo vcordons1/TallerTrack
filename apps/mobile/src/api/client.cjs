@@ -27,7 +27,8 @@ function createApiClient({ baseUrl, fetchImpl, store, onSessionLost = () => {}, 
     tokens = saved;
   }
 
-  async function raw(path, { method = "GET", body, headers = {}, authenticated = true } = {}, token) {
+  async function raw(path, { method = "GET", body, headers = {}, authenticated = true,
+    uncertainBusinessResult = false } = {}, token) {
     if (!configured) throw new ApiError("Configura EXPO_PUBLIC_API_BASE_URL con la URL /api/v1 de la laptop.");
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -52,7 +53,8 @@ function createApiClient({ baseUrl, fetchImpl, store, onSessionLost = () => {}, 
           status: response.status, code: error?.code,
           requestId: error?.requestId || response.headers?.get?.("X-Request-ID"),
           recovery: error?.recuperacion,
-          uncertain: error?.resultado === "DESCONOCIDO" || error?.recuperacion === "REINTENTAR_MISMA_CLAVE",
+          uncertain: uncertainBusinessResult && (error?.resultado === "DESCONOCIDO"
+            || error?.recuperacion === "REINTENTAR_MISMA_CLAVE"),
         });
       }
       if (!payload || typeof payload !== "object" || !Object.hasOwn(payload, "data")) {
@@ -61,9 +63,11 @@ function createApiClient({ baseUrl, fetchImpl, store, onSessionLost = () => {}, 
       return payload;
     } catch (error) {
       if (error instanceof ApiError) throw error;
-      throw new ApiError("No se pudo conectar con TallerTrack. Comprueba la red y vuelve a intentar.", {
-        uncertain: method !== "GET",
+      const failure = new ApiError("No se pudo conectar con TallerTrack. Comprueba la red y vuelve a intentar.", {
+        uncertain: uncertainBusinessResult,
       });
+      failure.transportCause = String(error?.message || error).replace(/(?:file|content):\/\/\S+/g, "[uri]");
+      throw failure;
     } finally {
       clearTimeout(timer);
     }
