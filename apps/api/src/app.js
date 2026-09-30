@@ -3,6 +3,8 @@ import express from "express";
 import { apiErrorHandler, createIdentityHttp, requestContext } from "./modules/identity/identity-http.js";
 import { createReceptionHttp } from "./modules/reception/reception-http.js";
 import { createOperationalQueryHttp } from "./modules/operational-query-http.js";
+import { createFreeDiagnosticHttp } from "./modules/service-orders/free-diagnostic-http.js";
+import { createInternalUsersHttp } from "./modules/identity/internal-users-http.js";
 
 export function createApp({
   checkReadiness = async () => false,
@@ -13,6 +15,8 @@ export function createApp({
   customerVehicleQueries,
   orderQueries,
   cursorCodec,
+  freeDiagnosticRepository,
+  internalUsers,
   logger,
 } = {}) {
   const app = express();
@@ -39,7 +43,10 @@ export function createApp({
 
   if (identityService !== undefined) {
     const identityHttp = createIdentityHttp({ identityService });
-    if (customerVehicleQueries !== undefined || orderQueries !== undefined || cursorCodec !== undefined) {
+    if (internalUsers !== undefined) app.use("/api/v1", createInternalUsersHttp({
+      requireAuthenticated: identityHttp.requireAuthenticated, repository: internalUsers, cursorCodec,
+    }));
+    if (customerVehicleQueries !== undefined || orderQueries !== undefined) {
       app.use("/api/v1", createOperationalQueryHttp({
         requireAuthenticated: identityHttp.requireAuthenticated,
         customerVehicleQueries,
@@ -54,6 +61,13 @@ export function createApp({
         preparedUpload,
         openCommercialOrder,
         privateFileConfig,
+      }).router);
+    }
+    if (freeDiagnosticRepository !== undefined) {
+      app.use("/api/v1", createFreeDiagnosticHttp({
+        requireAuthenticated: identityHttp.requireAuthenticated,
+        repository: freeDiagnosticRepository,
+        cursorCodec,
       }).router);
     }
     app.use("/api/v1", identityHttp.router);

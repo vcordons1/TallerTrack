@@ -83,10 +83,11 @@ try {
 
     $bootstrapEvidence = Invoke-OwnerSql @"
 select 'USER='||count(*) from usuario where login_normalizado='$login' and tipo_actor='INTERNO' and activo=1;
+select 'NAME_OK='||count(*) from usuario where login_normalizado='$login' and nombre_mostrado='Recepcion Oracle';
 select 'ROLES='||listagg(codigo_rol,',') within group(order by codigo_rol) from usuario_rol ur join usuario u on u.id_usuario=ur.id_usuario where u.login_normalizado='$login' and retirado_en is null;
 select 'HASHED='||case when credencial_hash like '`$argon2id`$v=19`$m=65536,p=1,t=3`$%' then 'YES' else 'NO' end from usuario where login_normalizado='$login';
 "@
-    if ($bootstrapEvidence -notmatch 'USER=1' -or $bootstrapEvidence -notmatch 'ROLES=RECEPCIONISTA' -or $bootstrapEvidence -notmatch 'HASHED=YES') {
+    if ($bootstrapEvidence -notmatch 'USER=1' -or $bootstrapEvidence -notmatch 'NAME_OK=1' -or $bootstrapEvidence -notmatch 'ROLES=RECEPCIONISTA' -or $bootstrapEvidence -notmatch 'HASHED=YES') {
         throw "Unexpected bootstrap evidence: $bootstrapEvidence"
     }
 

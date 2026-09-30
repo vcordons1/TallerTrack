@@ -145,7 +145,7 @@ try {
     $second = Invoke-Flyway 'migrate'
     $validate = Invoke-Flyway 'validate'
     Assert-Output 'second migration is idempotent' $second 'Schema .* is up to date|No migration necessary'
-    Assert-Output 'current migrations validate' $validate 'Successfully validated 17 migrations'
+    Assert-Output 'current migrations validate' $validate 'Successfully validated 20 migrations'
 
     $packageEvidence = Invoke-SysSql @"
 select 'VALID='||count(*) from all_objects where owner='$schema' and object_name='PKG_ORDENES' and object_type in ('PACKAGE','PACKAGE BODY') and status='VALID';
@@ -205,7 +205,7 @@ select 'EXECUTES='||count(*) from dba_tab_privs where grantee='$runtime' and own
 select 'DML='||count(*) from dba_tab_privs where grantee='$runtime' and owner='$schema' and privilege in ('INSERT','UPDATE','DELETE');
 "@
     Assert-Output 'runtime readiness reads' $grants 'SELECTS=3'
-    Assert-Output 'runtime facade executes' $grants 'EXECUTES=7'
+    Assert-Output 'runtime facade executes' $grants 'EXECUTES=9'
     Assert-Output 'runtime direct DML grants' $grants 'DML=0'
     Assert-Output 'runtime hash read denied' (Invoke-RuntimeSql "select sha256 from $schema.archivo_privado;" $false) 'ORA-00942|ORA-01031'
     Assert-Output 'runtime direct order DML denied' (Invoke-RuntimeSql "delete from $schema.orden_trabajo;" $false) 'ORA-00942|ORA-01031'
@@ -391,7 +391,7 @@ select 'INVARIANTS='||(select count(*) from orden_trabajo o where not exists(sel
     Write-Output 'PASS T01 guards: exact receptionist role, active actor/vehicle, current expected ownership, active-order exclusion, and conservative delivered-order debt guard.'
     Write-Output 'PASS T01 idempotency/replay: same command returns its order; incompatible key and object reuse fail; intermediate evidence failure leaves no partial facts.'
     Write-Output 'PASS T01 concurrency: independent sessions leave exactly one active order per vehicle and exactly one confirmed consumer per object key.'
-    Write-Output 'PASS T01 least privilege: three readiness SELECTs, seven bounded runtime facade EXECUTEs, no direct DML, and no arbitrary file/hash reads.'
+    Write-Output 'PASS T01 least privilege: three readiness SELECTs, nine bounded runtime facade EXECUTEs, no direct DML, and no arbitrary file/hash reads.'
     Write-Output "T01_EVIDENCE $($finalEvidence -replace '\s+',' ')"
 }
 finally {

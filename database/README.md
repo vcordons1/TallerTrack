@@ -7,7 +7,7 @@ The repository bootstrap downloads the official Windows distribution from Redgat
 ## Accounts and least privilege
 
 - `TT_OWNER` is the deployment identity. I02 needs `CREATE SESSION`, `CREATE TABLE`, `CREATE SEQUENCE`, `CREATE VIEW`, `CREATE PROCEDURE`, and a bounded quota. Later increments must add only the object-creation privileges required by their reviewed migrations.
-- `TT_APP` is the application runtime identity. It has no quota, DDL, direct DML, or arbitrary table reads. It receives `CREATE SESSION`, `SELECT` on the three readiness objects (`flyway_schema_history`, `CONFIG_TALLER`, and `ROL`), and `EXECUTE` only on seven bounded runtime facades: `PKG_VEHICULOS`, `PKG_AGENDA`, `PKG_ORDENES`, `PKG_IDENTIDAD`, `PKG_RECEPCION_HTTP`, `PKG_CONSULTAS_CLIENTES_VEHICULOS`, and `PKG_CONSULTAS_ORDENES`. It cannot execute owner-only `PKG_IDENTIDAD_BOOTSTRAP`.
+- `TT_APP` is the application runtime identity. It has no quota, DDL, direct DML, or arbitrary table reads. It receives `CREATE SESSION`, `SELECT` on the three readiness objects (`flyway_schema_history`, `CONFIG_TALLER`, and `ROL`), and `EXECUTE` only on nine bounded runtime facades: `PKG_VEHICULOS`, `PKG_AGENDA`, `PKG_ORDENES`, `PKG_IDENTIDAD`, `PKG_RECEPCION_HTTP`, `PKG_CONSULTAS_CLIENTES_VEHICULOS`, `PKG_CONSULTAS_ORDENES`, `PKG_DIAGNOSTICO_GRATUITO`, and `PKG_USUARIOS_INTERNOS`. It cannot execute owner-only `PKG_IDENTIDAD_BOOTSTRAP`.
 - `TT_QR_READ` is likewise deferred until the public QR read path and its views exist.
 
 For a local development owner, connect to `XEPDB1` as an authorized Oracle administrator, choose the password outside the repository, and execute the equivalent of:
@@ -28,7 +28,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/scripts/bootstr
 
 The bootstrap does not run if `TT_OWNER` already exists. Account lifecycle and password rotation remain administrative operations outside application startup.
 
-After `TT_OWNER` has V001–V017 applied, establish the runtime user through the separate administrator bootstrap. It refuses to replace an existing account, validates the owner objects before creating anything, accepts the password as a `SecureString`, verifies the exact privilege set, and removes a partially configured new account if verification fails:
+After `TT_OWNER` has V001–V020 applied, establish the runtime user through the separate administrator bootstrap. It refuses to replace an existing account, validates the owner objects before creating anything, accepts the password as a `SecureString`, verifies the exact privilege set, and removes a partially configured new account if verification fails:
 
 ```powershell
 $runtimePassword = Read-Host 'New TT_APP password' -AsSecureString
@@ -36,7 +36,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/scripts/bootstr
 Remove-Variable runtimePassword
 ```
 
-The application never runs this script and never receives `TT_OWNER` or administrator credentials. Future business migrations may extend the grants only when their package/view contracts exist and are tested; they must not add free table DML.
+The application never runs this script and never receives `TT_OWNER` or administrator credentials. For an existing `TT_APP` created before V019, after applying the new migrations the database operator grants `EXECUTE ON TT_OWNER.PKG_DIAGNOSTICO_GRATUITO TO TT_APP` and `EXECUTE ON TT_OWNER.PKG_USUARIOS_INTERNOS TO TT_APP`; no table grants or account replacement are needed. Future business migrations may extend the grants only when their package/view contracts exist and are tested; they must not add free table DML.
 
 Do not reuse this local credential in another environment. Do not place it in a command argument, repository file, shell history, log, or mobile/backend configuration.
 
@@ -79,7 +79,7 @@ ORDER BY "installed_rank";
 - `database/scripts/` contains tooling/bootstrap scripts, not a custom migration engine.
 - As later increments require them, add maintainable current sources under `database/tables/`, `constraints/`, `indexes/`, `views/`, `packages/`, `grants/`, and `seeds/`; create each directory only with its first real artifact. Publish every source change through a new migration. Keep database test fixtures under tests, not production seeds.
 
-V001 remains the immutable TT-011 technical baseline. I01 uses V002–V004. I02 uses V005–V008, I03 uses V009–V011, and G-03B uses V012–V013. TT-019 adds V014 with `PKG_ORDENES`; TT-020 adds V015 with `PKG_IDENTIDAD` and owner-only `PKG_IDENTIDAD_BOOTSTRAP`; TT-021 adds V016 with `PKG_RECEPCION_HTTP`; TT-022 adds V017 with bounded read facades for C01/V01/V03 and O01/O03. V001–V016 remain unchanged. Runtime grants are applied by the explicit bootstrap, not a migration.
+V001 remains the immutable TT-011 technical baseline. I01 uses V002–V004. I02 uses V005–V008, I03 uses V009–V011, and G-03B uses V012–V013. TT-019 adds V014 with `PKG_ORDENES`; TT-020 adds V015 with `PKG_IDENTIDAD` and owner-only `PKG_IDENTIDAD_BOOTSTRAP`; TT-021 adds V016 with `PKG_RECEPCION_HTTP`; TT-022 adds V017 with bounded read facades for C01/V01/V03 and O01/O03. TT-024 adds V018 (`TRABAJO`, `TRABAJO_EVENTO`, `DIAGNOSTICO`) and V019 (`PKG_DIAGNOSTICO_GRATUITO`). The future `TRABAJO_EVENTO.id_item` FK awaits `PRESUPUESTO_ITEM`; the free diagnostic path deliberately has no item, charge or budget table. TT-025 adds V020 (`PKG_USUARIOS_INTERNOS`) for I10–I14. V001–V019 remain unchanged. Runtime grants are applied by the explicit bootstrap, not a migration.
 
 For an optional local reception scenario, first provision an internal A/R user, then run `npm.cmd run bootstrap:demo-reception` with the same `TT_BOOTSTRAP_ORACLE_USER`, `TT_BOOTSTRAP_ORACLE_SCHEMA`, `TT_BOOTSTRAP_ORACLE_PASSWORD`, and `TT_BOOTSTRAP_ORACLE_CONNECT_STRING` owner settings used by the internal-user bootstrap. The tool recognizes an existing active client/vehicle/current-property scenario without an active order or creates one through `PKG_VEHICULOS`; it prints only non-sensitive IDs and descriptors.
 
@@ -91,7 +91,7 @@ With local Oracle XE 21c running and local OS authentication available to `sqlpl
 npm.cmd run test:db:integration
 ```
 
-The aggregate test runs Foundation, I02, I03, G-03B, T01, and authentication. Foundation verifies clean V001–V017 and upgrade/idempotency. The authentication suite provisions a real internal user and exercises authentication plus the reception/query E2E against Oracle and isolated private storage, including live roles, refresh reuse, logout, property transfer/history, least privilege, rollback and independent-session races. Every guarded schema is dropped in `finally`.
+The aggregate test runs Foundation, I02, I03, G-03B, T01, authentication, free diagnosis, and internal users. Foundation verifies clean V001–V020 and upgrade/idempotency. The authentication suite provisions a real internal user and exercises authentication plus the reception/query E2E against Oracle and isolated private storage, including live roles, refresh reuse, logout, property transfer/history, least privilege, rollback and independent-session races. `powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/tests/free-diagnostic.integration.ps1` checks O05–O07, T01/T02/T04, D01/D02, projection, replay, independent-session races and least privilege against temporary Oracle accounts. Every guarded schema is dropped in `finally`.
 
 TT-013 adds a separate real API integration test. It creates a unique migrated owner and an ephemeral literal `TT_APP`, verifies its exact grants and denied DDL/DML, exercises Express through node-oracledb Thin mode, checks a real incorrect credential, and removes both accounts in `finally`:
 

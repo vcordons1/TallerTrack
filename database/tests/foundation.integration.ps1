@@ -117,7 +117,7 @@ $upgradeSchema = 'TT_TEST_' + [guid]::NewGuid().ToString('N').Substring(0,12).To
 $cleanPassword = 'Aa9#' + [guid]::NewGuid().ToString('N').Substring(0,20)
 $upgradePassword = 'Aa9#' + [guid]::NewGuid().ToString('N').Substring(0,20)
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('tallertrack-db-' + [guid]::NewGuid().ToString('N'))
-$baselineOnly = Join-Path $tempRoot 'baseline-only'
+$throughV017 = Join-Path $tempRoot 'through-v017'
 $mutated = Join-Path $tempRoot 'mutated'
 $created = [Collections.Generic.List[string]]::new()
 
@@ -127,8 +127,10 @@ try {
     if ($missing -notmatch 'TT_DB_URL') { throw 'Missing configuration did not identify TT_DB_URL.' }
     Write-Output 'PASS configuration: missing settings fail clearly.'
 
-    New-Item -ItemType Directory -Path $baselineOnly,$mutated | Out-Null
-    Copy-Item (Join-Path $migrations 'V001__technical_baseline.sql') $baselineOnly
+    New-Item -ItemType Directory -Path $throughV017,$mutated | Out-Null
+    Get-ChildItem -LiteralPath $migrations -Filter '*.sql' |
+        Where-Object { $_.Name -match '^V0(0[1-9]|1[0-7])__' } |
+        Copy-Item -Destination $throughV017
     Copy-Item (Join-Path $migrations '*.sql') $mutated
 
     New-TestOwner $cleanSchema $cleanPassword; $created.Add($cleanSchema)
@@ -140,14 +142,21 @@ try {
     $env:TT_DB_PASSWORD = $cleanPassword
     $cleanMigrate = Invoke-Flyway 'migrate'; $cleanValidate = Invoke-Flyway 'validate'
     Assert-I01Structure $cleanSchema
-    Write-Output 'PASS migration: clean schema applied V001 through V017.'
+    $cleanUserPackage = Invoke-SysSql @"
+select 'USERS_VALID='||count(*) from dba_objects where owner='$cleanSchema' and object_name='PKG_USUARIOS_INTERNOS' and object_type in ('PACKAGE','PACKAGE BODY') and status='VALID';
+select 'USERS_ERRORS='||count(*) from dba_errors where owner='$cleanSchema' and name='PKG_USUARIOS_INTERNOS';
+"@
+    if ($cleanUserPackage -notmatch 'USERS_VALID=2' -or $cleanUserPackage -notmatch 'USERS_ERRORS=0') {
+        throw "Internal-user package failed clean-install compilation: $cleanUserPackage"
+    }
+    Write-Output 'PASS migration: clean schema applied V001 through V020.'
 
     New-TestOwner $upgradeSchema $upgradePassword; $created.Add($upgradeSchema)
     Set-OwnerEnvironment $upgradeSchema $upgradePassword
-    $env:FLYWAY_LOCATIONS = 'filesystem:' + $baselineOnly.Replace('\','/')
+    $env:FLYWAY_LOCATIONS = 'filesystem:' + $throughV017.Replace('\','/')
     Invoke-Flyway 'migrate' | Out-Null
     $before = Invoke-SysSql "select 'COUNT='||count(*) from $upgradeSchema.`"flyway_schema_history`";"
-    if ($before -notmatch 'COUNT=1') { throw "V001-only setup failed: $before" }
+    if ($before -notmatch 'COUNT=17') { throw "V017 upgrade base failed: $before" }
     Remove-Item Env:FLYWAY_LOCATIONS
     $upgrade = Invoke-Flyway 'migrate'; $second = Invoke-Flyway 'migrate'; $info = Invoke-Flyway 'info'; $validate = Invoke-Flyway 'validate'
     Assert-I01Structure $upgradeSchema
@@ -166,7 +175,7 @@ select 'CONDITIONAL_UQ='||count(*) from all_indexes where owner='$upgradeSchema'
  and index_name in ('UQ_USUARIO_ROL_VIGENTE','UQ_TOKEN_RENOVACION_ACTIVA') and uniqueness='UNIQUE';
 "@
     $history = Invoke-SysSql @"
-select 'MIGRATION_COUNT='||count(*) from $upgradeSchema."flyway_schema_history" where "version" in ('001','002','003','004','005','006','007','008','009','010','011','012','013','014','015','016','017') and "success"=1;
+select 'MIGRATION_COUNT='||count(*) from $upgradeSchema."flyway_schema_history" where "version" in ('001','002','003','004','005','006','007','008','009','010','011','012','013','014','015','016','017','018','019','020') and "success"=1;
 select 'DUPLICATES='||count(*) from (select "version" from $upgradeSchema."flyway_schema_history" group by "version" having count(*)>1);
 select 'VERSIONS='||listagg("version",',') within group(order by "installed_rank") from $upgradeSchema."flyway_schema_history" where "success"=1;
 select 'IDENTITY_VALID='||count(*) from dba_objects where owner='$upgradeSchema' and object_name in ('PKG_IDENTIDAD','PKG_IDENTIDAD_BOOTSTRAP') and object_type in ('PACKAGE','PACKAGE BODY') and status='VALID';
@@ -175,9 +184,16 @@ select 'RECEPTION_VALID='||count(*) from dba_objects where owner='$upgradeSchema
 select 'RECEPTION_ERRORS='||count(*) from dba_errors where owner='$upgradeSchema' and name='PKG_RECEPCION_HTTP';
 select 'QUERY_VALID='||count(*) from dba_objects where owner='$upgradeSchema' and object_name in ('PKG_CONSULTAS_CLIENTES_VEHICULOS','PKG_CONSULTAS_ORDENES') and object_type in ('PACKAGE','PACKAGE BODY') and status='VALID';
 select 'QUERY_ERRORS='||count(*) from dba_errors where owner='$upgradeSchema' and name in ('PKG_CONSULTAS_CLIENTES_VEHICULOS','PKG_CONSULTAS_ORDENES');
+select 'DIAGNOSTIC_VALID='||count(*) from dba_objects where owner='$upgradeSchema' and object_name='PKG_DIAGNOSTICO_GRATUITO' and object_type in ('PACKAGE','PACKAGE BODY') and status='VALID';
+select 'DIAGNOSTIC_ERRORS='||count(*) from dba_errors where owner='$upgradeSchema' and name='PKG_DIAGNOSTICO_GRATUITO';
+select 'USERS_VALID='||count(*) from dba_objects where owner='$upgradeSchema' and object_name='PKG_USUARIOS_INTERNOS' and object_type in ('PACKAGE','PACKAGE BODY') and status='VALID';
+select 'USERS_ERRORS='||count(*) from dba_errors where owner='$upgradeSchema' and name='PKG_USUARIOS_INTERNOS';
 "@
-    if ($history -notmatch 'MIGRATION_COUNT=17' -or $history -notmatch 'DUPLICATES=0' -or $history -notmatch 'VERSIONS=001,002,003,004,005,006,007,008,009,010,011,012,013,014,015,016,017' -or $history -notmatch 'IDENTITY_VALID=4' -or $history -notmatch 'IDENTITY_ERRORS=0' -or $history -notmatch 'RECEPTION_VALID=2' -or $history -notmatch 'RECEPTION_ERRORS=0' -or $history -notmatch 'QUERY_VALID=4' -or $history -notmatch 'QUERY_ERRORS=0') { throw "Unexpected history: $history" }
-    if ($info -notmatch 'Success' -or $validate -notmatch 'Successfully validated 17 migrations') { throw 'Flyway info/validate was not green for seventeen migrations.' }
+    if ($history -notmatch 'USERS_VALID=2' -or $history -notmatch 'USERS_ERRORS=0') {
+        throw "Internal-user package failed upgrade compilation: $history"
+    }
+    if ($history -notmatch 'MIGRATION_COUNT=20' -or $history -notmatch 'DUPLICATES=0' -or $history -notmatch 'VERSIONS=001,002,003,004,005,006,007,008,009,010,011,012,013,014,015,016,017,018,019,020' -or $history -notmatch 'IDENTITY_VALID=4' -or $history -notmatch 'IDENTITY_ERRORS=0' -or $history -notmatch 'RECEPTION_VALID=2' -or $history -notmatch 'RECEPTION_ERRORS=0' -or $history -notmatch 'QUERY_VALID=4' -or $history -notmatch 'QUERY_ERRORS=0' -or $history -notmatch 'DIAGNOSTIC_VALID=2' -or $history -notmatch 'DIAGNOSTIC_ERRORS=0') { throw "Unexpected history: $history" }
+    if ($info -notmatch 'Success' -or $validate -notmatch 'Successfully validated 20 migrations') { throw 'Flyway info/validate was not green for twenty migrations.' }
 
     Add-Content (Join-Path $mutated 'V001__technical_baseline.sql') '-- intentional checksum mutation'
     $env:FLYWAY_LOCATIONS = 'filesystem:' + $mutated.Replace('\','/')
@@ -247,9 +263,9 @@ commit;
     $allOutput = $authenticationFailure+$cleanMigrate+$cleanValidate+$upgrade+$second+$info+$validate+$history+$checksumFailure
     foreach ($password in $cleanPassword,$upgradePassword) { if ($allOutput.Contains($password)) { throw 'Test output exposed a generated password.' } }
     Write-Output 'PASS bootstrap: only required object-creation privileges and a 20 MiB quota.'
-    Write-Output 'PASS upgrade/idempotency: V001 upgraded through V017; second migrate duplicated neither history nor seeds.'
+    Write-Output 'PASS upgrade/idempotency: V017 upgraded through V020; second migrate duplicated neither history nor seeds.'
     Write-Output 'PASS structure/seeds: nine I01 tables, critical types, enabled constraints, conditional indexes, five roles, and singleton configuration.'
-    Write-Output 'PASS validation: Flyway validated V001-V017, identity/reception/query packages are VALID without USER_ERRORS, and a changed applied V001 was rejected.'
+    Write-Output 'PASS validation: Flyway validated V001-V020, identity/reception/query/diagnostic/user packages are VALID without USER_ERRORS, and a changed applied V001 was rejected.'
     Write-Output "ORACLE_EVIDENCE $($history -replace '\s+',' ')"
     Write-Output "SCHEMA_EVIDENCE $($schemaEvidence -replace '\s+',' ')"
 }

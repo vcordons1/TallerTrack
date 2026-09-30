@@ -9,7 +9,8 @@ export default function InternalOrderDetailRoute() {
   const { access } = useSession();
   return (
     <CapabilityBoundary capability={CAPABILITIES.ORDERS_READ}>
-      {access.roles.includes("RECEPCIONISTA") ? <RealOrderDetailScreen /> : <OrderDetailScreen />}
+      {access.roles.includes("RECEPCIONISTA") || access.roles.includes("MECANICO")
+        ? <RealOrderDetailScreen /> : <OrderDetailScreen />}
     </CapabilityBoundary>
   );
 }

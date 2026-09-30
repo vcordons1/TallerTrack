@@ -8,6 +8,16 @@ function response(status, body) {
     json: async () => body };
 }
 
+test("a lost K response preserves uncertainty for malformed success or unstructured 5xx", async () => {
+  for (const reply of [response(201, null), response(503, null)]) {
+    const client = createApiClient({ baseUrl: "http://laptop:3000/api/v1",
+      store: { read: async () => ({ accessToken: "a", refreshToken: "r" }) }, fetchImpl: async () => reply });
+    await client.restore();
+    await assert.rejects(client.request("/interno/usuarios", { method: "POST", body: {}, uncertainBusinessResult: true }),
+      (error) => error.uncertain === true);
+  }
+});
+
 test("simultaneous expired requests rotate refresh once and retry at most once", async () => {
   const calls = [];
   const writes = [];

@@ -21,8 +21,11 @@
     "test:db:g03b": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/tests/g03b.integration.ps1",
     "test:db:t01": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/tests/t01.integration.ps1",
     "test:db:auth": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/tests/auth.integration.ps1",
-    "test:db:integration": "npm.cmd run test:db:foundation && npm.cmd run test:db:i02 && npm.cmd run test:db:i03 && npm.cmd run test:db:g03b && npm.cmd run test:db:t01 && npm.cmd run test:db:auth",
-    "test:api:oracle": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File apps/api/test/oracle.integration.ps1"
+    "test:db:free-diagnostic": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/tests/free-diagnostic.integration.ps1",
+    "test:db:integration": "npm.cmd run test:db:foundation && npm.cmd run test:db:i02 && npm.cmd run test:db:i03 && npm.cmd run test:db:g03b && npm.cmd run test:db:t01 && npm.cmd run test:db:auth && npm.cmd run test:db:free-diagnostic && npm.cmd run test:db:users",
+    "test:api:oracle": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File apps/api/test/oracle.integration.ps1",
+    "test:db:users": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/tests/internal-users.integration.ps1",
+    "start:users:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File database/scripts/start-internal-users-local.ps1"
   },
   "packageManager": "npm@11.13.0"
 }

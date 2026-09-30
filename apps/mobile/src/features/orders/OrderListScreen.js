@@ -25,10 +25,11 @@ const {
   normalizeOrderFilter,
 } = require("./orderPresentation");
 
-export function OrderListScreen({ repository = demoOrderRepository, realReception = false }) {
+export function OrderListScreen({ repository = demoOrderRepository, realReception = false, realTechnical = false }) {
   const params = useLocalSearchParams();
   const { access } = useSession();
-  const orderView = getOrderView(access.roles);
+  const orderView = realTechnical ? "TECNICA" : getOrderView(access.roles);
+  const realOrders = realReception || realTechnical;
   const [filter, setFilter] = useState(() => normalizeOrderFilter(params.filtro));
   const [reloadKey, setReloadKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -39,10 +40,10 @@ export function OrderListScreen({ repository = demoOrderRepository, realReceptio
   const firstFocus = useRef(true);
 
   useFocusEffect(useCallback(() => {
-    if (!realReception) return;
+    if (!realOrders) return;
     if (firstFocus.current) firstFocus.current = false;
     else setReloadKey((value) => value + 1);
-  }, [realReception]));
+  }, [realOrders]));
 
   useEffect(() => {
     setFilter(normalizeOrderFilter(params.filtro));
@@ -52,7 +53,7 @@ export function OrderListScreen({ repository = demoOrderRepository, realReceptio
     let active = true;
     if (!refreshing) setState({ status: "loading" });
 
-    const load = realReception ? repository.loadPage(orderView) : repository.loadList(orderView).then((orders) => ({ orders, cursor: null }));
+    const load = realOrders ? repository.loadPage(orderView) : repository.loadList(orderView).then((orders) => ({ orders, cursor: null }));
     load.then(
       ({ orders, cursor }) => {
         if (active) {
@@ -73,7 +74,7 @@ export function OrderListScreen({ repository = demoOrderRepository, realReceptio
     return () => {
       active = false;
     };
-  }, [orderView, reloadKey, repository, realReception]);
+  }, [orderView, reloadKey, repository, realOrders]);
 
   const visibleOrders = useMemo(
     () => filterOrders(state.status === "success" ? state.orders : [], filter),
@@ -117,7 +118,7 @@ export function OrderListScreen({ repository = demoOrderRepository, realReceptio
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         keyExtractor={(order) => order.id}
         ListEmptyComponent={<OrdersEmpty filtered={filter !== ORDER_FILTERS.ALL} />}
-        ListFooterComponent={realReception ? nextCursor ? <Pressable accessibilityRole="button"
+        ListFooterComponent={realOrders ? nextCursor ? <Pressable accessibilityRole="button"
           disabled={loadingMore} onPress={loadMore} style={{ minHeight: 52, justifyContent: "center", alignItems: "center" }}>
           <Text style={{ ...typography.bodyStrong, color: colors.primary }}>{loadingMore ? "Cargando…" : pageError ? "Error al cargar. Reintentar" : "Cargar más órdenes"}</Text>
         </Pressable> : null : <Text style={styles.demoNotice}>Modo demostración · consulta solamente</Text>}

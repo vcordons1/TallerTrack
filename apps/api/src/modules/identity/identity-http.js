@@ -101,10 +101,12 @@ export function requestContext(request, response, next) {
 
 const CONFLICTS = new Set([
   "CLAVE_REUTILIZADA", "ORDEN_ACTIVA_EXISTENTE", "PROPIEDAD_CAMBIADA", "OBJETO_YA_CONSUMIDO",
+  "REFERENCIA_DUPLICADA", "ESTADO_INCOMPATIBLE", "VERSION_DESACTUALIZADA",
 ]);
 const DOMAIN_FAILURES = new Set([
   "DEUDA_NO_VERIFICABLE", "CLIENTE_NO_DISPONIBLE", "VEHICULO_NO_ENCONTRADO",
   "VEHICULO_NO_DISPONIBLE", "EVIDENCIA_REQUERIDA", "EVIDENCIA_NO_APLICABLE", "EVIDENCIA_INVALIDA",
+  "ALCANCE_NO_AUTORIZADO", "ROL_REQUERIDO", "ULTIMO_ADMINISTRADOR",
 ]);
 const RECEIPT_FAILURES = new Set([
   "INVALID_UPLOAD_RECEIPT", "UPLOAD_RECEIPT_CONTEXT_MISMATCH", "UPLOAD_RECEIPT_EXPIRED",
@@ -134,8 +136,9 @@ export function apiErrorHandler(error, request, response, _next, logger = consol
     recovery = status === 401 ? "REAUTENTICAR" : status === 429 ? "ESPERAR" : "CORREGIR";
   } else if (error instanceof OperationalQueryError) {
     code = error.code;
-    status = code === "RECURSO_NO_ENCONTRADO" ? 404 : 400;
-    message = status === 404 ? "El recurso no existe o no está disponible." : "La solicitud no es válida.";
+    status = code === "RECURSO_NO_ENCONTRADO" ? 404 : DOMAIN_FAILURES.has(code) ? 422 : 400;
+    message = status === 404 ? "El recurso no existe o no está disponible."
+      : status === 422 ? "La operación no cumple las condiciones vigentes." : "La solicitud no es válida.";
     recovery = status === 404 ? "NINGUNA" : "CORREGIR";
   } else if (error?.type === "entity.too.large") {
     status = 413;
@@ -180,6 +183,16 @@ export function apiErrorHandler(error, request, response, _next, logger = consol
     code = "ACCION_NO_PERMITIDA";
     message = "La acción no está permitida.";
     recovery = "CORREGIR";
+  } else if (error?.code === "ACCION_NO_PERMITIDA") {
+    status = 403;
+    code = "ACCION_NO_PERMITIDA";
+    message = "La acción no está permitida.";
+    recovery = "CORREGIR";
+  } else if (error?.code === "RECURSO_NO_ENCONTRADO") {
+    status = 404;
+    code = "RECURSO_NO_ENCONTRADO";
+    message = "El recurso no existe o no está disponible.";
+    recovery = "NINGUNA";
   } else if (error?.code === "INVALID_ORDER_OPENING" || error?.code === "RECEPCION_INVALIDA"
     || error?.code === "SOLICITUD_INVALIDA" || error?.code === "SOLICITUD_ABORTADA") {
     status = 400;

@@ -32,8 +32,8 @@ $userCredential = [System.Management.Automation.PSCredential]::new('internal-use
 $ownerCredential = [System.Management.Automation.PSCredential]::new($OwnerUser, $OwnerPassword)
 $plainUserPassword = $userCredential.GetNetworkCredential().Password
 $previous = @{}
-foreach ($name in 'TT_BOOTSTRAP_ORACLE_USER','TT_BOOTSTRAP_ORACLE_SCHEMA','TT_BOOTSTRAP_ORACLE_PASSWORD','TT_BOOTSTRAP_ORACLE_CONNECT_STRING') {
-    $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+foreach ($environmentName in 'TT_BOOTSTRAP_ORACLE_USER','TT_BOOTSTRAP_ORACLE_SCHEMA','TT_BOOTSTRAP_ORACLE_PASSWORD','TT_BOOTSTRAP_ORACLE_CONNECT_STRING') {
+    $previous[$environmentName] = [Environment]::GetEnvironmentVariable($environmentName, 'Process')
 }
 
 try {
@@ -46,8 +46,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Internal-user bootstrap failed.' }
 }
 finally {
-    foreach ($name in $previous.Keys) {
-        [Environment]::SetEnvironmentVariable($name, $previous[$name], 'Process')
+    foreach ($environmentName in $previous.Keys) {
+        [Environment]::SetEnvironmentVariable($environmentName, $previous[$environmentName], 'Process')
     }
     $plainUserPassword = $null
     $userCredential = $null

@@ -5,9 +5,12 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
 } from "react";
 
 import { api, setSessionHandlers } from "../api/runtime";
+import { AppState } from "react-native";
+import { usePathname } from "expo-router";
 
 const {
   initialSessionState,
@@ -18,10 +21,13 @@ const SessionContext = createContext(null);
 
 export function SessionProvider({ children }) {
   const [state, dispatch] = useReducer(sessionReducer, initialSessionState);
+  const pathname = usePathname();
+  const identityRequest = useRef(0);
 
   const reloadIdentity = useCallback(async () => {
+    const request = ++identityRequest.current;
     const access = await api.identity();
-    dispatch({ type: "SESSION_RESOLVED", access });
+    if (request === identityRequest.current && api.hasTokens) dispatch({ type: "SESSION_RESOLVED", access });
     return access;
   }, []);
 
@@ -46,6 +52,14 @@ export function SessionProvider({ children }) {
     });
   }, [bootstrap, reloadIdentity]);
 
+  useEffect(() => {
+    if (api.hasTokens) void reloadIdentity().catch(() => {});
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (next === "active" && api.hasTokens) void reloadIdentity().catch(() => {});
+    });
+    return () => subscription.remove();
+  }, [pathname, reloadIdentity]);
+
   const value = useMemo(
     () => ({
       ...state,
@@ -56,6 +70,7 @@ export function SessionProvider({ children }) {
       },
       logout: () => api.logout(),
       retrySession: bootstrap,
+      refreshIdentity: reloadIdentity,
       clearSession: () => api.clear(),
     }),
     [state, bootstrap, reloadIdentity],

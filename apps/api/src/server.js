@@ -10,6 +10,7 @@ import {
   loadPrivateFileConfig,
   loadUploadReceiptConfig,
   loadAuthConfig,
+  loadBindHost,
 } from "./platform/config.js";
 import { createOraclePoolManager } from "./platform/oracle-pool.js";
 import { createPreparedPrivateUpload } from "./platform/prepared-private-upload.js";
@@ -25,10 +26,12 @@ import { createTokenService } from "./modules/identity/tokens.js";
 import { createOpaqueCursorCodec } from "./platform/operational-query-contract.js";
 import { createOracleCustomerVehicleQueries } from "./modules/customers-vehicles/oracle-customer-vehicle-queries.js";
 import { createOracleOrderQueries } from "./modules/service-orders/oracle-order-queries.js";
+import { createOracleFreeDiagnostic } from "./modules/service-orders/oracle-free-diagnostic.js";
+import { createInternalUsers } from "./modules/identity/internal-users.js";
 
-function listen(app, port) {
+function listen(app, port, host) {
   return new Promise((resolve, reject) => {
-    const server = app.listen(port);
+    const server = app.listen(port, host);
     server.once("listening", () => resolve(server));
     server.once("error", reject);
   });
@@ -98,7 +101,11 @@ export async function startServer({
   });
   const customerVehicleQueries = createOracleCustomerVehicleQueries({ poolManager, schema: config.schema, driver });
   const orderQueries = createOracleOrderQueries({ poolManager, schema: config.schema, driver });
+  const freeDiagnosticRepository = createOracleFreeDiagnostic({ poolManager, schema: config.schema, driver });
   const cursorCodec = createOpaqueCursorCodec({ hmacKey: authConfig.signingKey });
+  const internalUsers = createInternalUsers({ poolManager, schema: config.schema, driver,
+    credentials: createOracleIdentityRepository({ poolManager, schema: config.schema, driver }),
+    passwords: createPasswordService(), maxConcurrency: authConfig.hashMaximumConcurrency });
 
   let server;
   try {
@@ -111,9 +118,11 @@ export async function startServer({
       privateFileConfig,
       customerVehicleQueries,
       orderQueries,
+      freeDiagnosticRepository,
+      internalUsers,
       cursorCodec,
       logger,
-    }), port);
+    }), port, loadBindHost(environment));
   } catch (error) {
     await poolManager.close();
     throw error;

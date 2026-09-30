@@ -24,5 +24,8 @@
     "react-native": "0.86.3",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0"
+  },
+  "devDependencies": {
+    "react-test-renderer": "19.2.3"
   }
 }

@@ -79,11 +79,11 @@ try {
     $privileges = Invoke-SysSql @"
 select 'SYS=' || listagg(privilege, ',') within group (order by privilege) from dba_sys_privs where grantee='$runtimeUser';
 select 'OBJECTS=' || count(*) from dba_tab_privs where grantee='$runtimeUser' and privilege='SELECT' and owner='$owner';
-select 'EXECUTE=' || count(*) from dba_tab_privs where grantee='$runtimeUser' and privilege='EXECUTE' and owner='$owner' and table_name in ('PKG_VEHICULOS','PKG_AGENDA','PKG_ORDENES','PKG_IDENTIDAD','PKG_RECEPCION_HTTP','PKG_CONSULTAS_CLIENTES_VEHICULOS','PKG_CONSULTAS_ORDENES');
+select 'EXECUTE=' || count(*) from dba_tab_privs where grantee='$runtimeUser' and privilege='EXECUTE' and owner='$owner' and table_name in ('PKG_VEHICULOS','PKG_AGENDA','PKG_ORDENES','PKG_IDENTIDAD','PKG_RECEPCION_HTTP','PKG_CONSULTAS_CLIENTES_VEHICULOS','PKG_CONSULTAS_ORDENES','PKG_DIAGNOSTICO_GRATUITO','PKG_USUARIOS_INTERNOS');
 select 'BOOTSTRAP=' || count(*) from dba_tab_privs where grantee='$runtimeUser' and privilege='EXECUTE' and owner='$owner' and table_name='PKG_IDENTIDAD_BOOTSTRAP';
 select 'QUOTAS=' || count(*) from dba_ts_quotas where username='$runtimeUser' and max_bytes <> 0;
 "@
-    if ($privileges -notmatch 'SYS=CREATE SESSION' -or $privileges -notmatch 'OBJECTS=3' -or $privileges -notmatch 'EXECUTE=7' -or $privileges -notmatch 'BOOTSTRAP=0' -or $privileges -notmatch 'QUOTAS=0') {
+    if ($privileges -notmatch 'SYS=CREATE SESSION' -or $privileges -notmatch 'OBJECTS=3' -or $privileges -notmatch 'EXECUTE=9' -or $privileges -notmatch 'BOOTSTRAP=0' -or $privileges -notmatch 'QUOTAS=0') {
         throw "Unexpected TT_APP privilege evidence: $privileges"
     }
 
@@ -124,7 +124,7 @@ select 'I01=' || (select count(*) from $owner.CONFIG_TALLER) || ':' || (select c
 
     Write-Output 'PASS Oracle runtime: Thin-mode Express readiness reached XEPDB1 through one reused pool.'
     Write-Output 'PASS readiness: exact HTTP 200 body; real bad credential stayed live and returned safe HTTP 503.'
-    Write-Output 'PASS least privilege: CREATE SESSION, exactly three SELECT grants, seven bounded runtime package executes, no bootstrap execute, zero quota; DDL and direct DML denied.'
+    Write-Output 'PASS least privilege: CREATE SESSION, exactly three SELECT grants, nine bounded runtime package executes, no bootstrap execute, zero quota; DDL and direct DML denied.'
     Write-Output "ORACLE_EVIDENCE $($readEvidence -replace '\s+',' ')"
 }
 catch {

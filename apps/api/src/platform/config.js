@@ -83,6 +83,14 @@ export function loadPort(environment = process.env) {
   return readInteger(environment, "PORT", 3000, { minimum: 1, maximum: 65535 });
 }
 
+export function loadBindHost(environment = process.env) {
+  const host = environment.TT_API_BIND_HOST ?? "127.0.0.1";
+  if (host !== "127.0.0.1" && host !== "0.0.0.0") {
+    throw new Error("TT_API_BIND_HOST must be 127.0.0.1 or 0.0.0.0");
+  }
+  return host;
+}
+
 export function loadPrivateFileConfig(environment = process.env) {
   const configuredRoot = requireValue(environment, "TT_PRIVATE_STORAGE_ROOT");
 

@@ -54,11 +54,12 @@ function createApiClient({ baseUrl, fetchImpl, store, onSessionLost = () => {}, 
           requestId: error?.requestId || response.headers?.get?.("X-Request-ID"),
           recovery: error?.recuperacion,
           uncertain: uncertainBusinessResult && (error?.resultado === "DESCONOCIDO"
-            || error?.recuperacion === "REINTENTAR_MISMA_CLAVE"),
+            || error?.recuperacion === "REINTENTAR_MISMA_CLAVE"
+            || (response.status >= 500 && error?.resultado !== "NO_CONFIRMADO")),
         });
       }
       if (!payload || typeof payload !== "object" || !Object.hasOwn(payload, "data")) {
-        throw new ApiError("El servidor devolvió una respuesta inesperada.", { status: response.status });
+        throw new ApiError("El servidor devolvió una respuesta inesperada.", { status: response.status, uncertain: uncertainBusinessResult });
       }
       return payload;
     } catch (error) {

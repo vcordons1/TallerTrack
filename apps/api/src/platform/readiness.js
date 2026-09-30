@@ -12,7 +12,9 @@ export function createReadinessCheck({ poolManager, config }) {
       SYS_CONTEXT('USERENV', 'SERVICE_NAME'),
       (SELECT COUNT(DISTINCT LPAD("version", 3, '0'))
          FROM ${migrationHistory}
-        WHERE LPAD("version", 3, '0') IN ('001', '002', '003', '004')
+        WHERE LPAD("version", 3, '0') IN (
+          '001','002','003','004','005','006','007','008','009','010',
+          '011','012','013','014','015','016','017','018','019','020')
           AND "success" = 1),
       (SELECT COUNT(*) FROM ${configurationTable}
         WHERE ID_CONFIG = 1 AND MONEDA = 'GTQ' AND ZONA_HORARIA = 'America/Guatemala'),
@@ -27,7 +29,7 @@ export function createReadinessCheck({ poolManager, config }) {
         && row[0] === config.user
         && row[1]?.toUpperCase() === config.expectedDatabase
         && row[2]?.toUpperCase() === config.expectedService
-        && row[3] === 4
+        && row[3] === 20
         && row[4] === 1
         && row[5] === REQUIRED_ROLES.length;
     });

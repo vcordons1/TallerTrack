@@ -3,10 +3,17 @@ import test from "node:test";
 
 import {
   loadAuthConfig,
+  loadBindHost,
   loadOracleConfig,
   loadPrivateFileConfig,
   loadUploadReceiptConfig,
 } from "../src/platform/config.js";
+
+test("Express binds to loopback unless the LAN demo explicitly opts in", () => {
+  assert.equal(loadBindHost({}), "127.0.0.1");
+  assert.equal(loadBindHost({ TT_API_BIND_HOST: "0.0.0.0" }), "0.0.0.0");
+  assert.throws(() => loadBindHost({ TT_API_BIND_HOST: "192.168.1.10" }), /TT_API_BIND_HOST/);
+});
 
 test("authentication profile requires secrets and coherent bounded TTLs", () => {
   const environment = {

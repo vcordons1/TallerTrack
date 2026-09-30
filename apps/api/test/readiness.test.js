@@ -17,15 +17,15 @@ function checkFor(rowOrError) {
   return createReadinessCheck({ poolManager, config });
 }
 
-test("readiness requires the runtime identity, service, four migrations, configuration, and all roles", async () => {
-  assert.equal(await checkFor(["TT_APP", "XE", "XEPDB1", 4, 1, 5])(), true);
+test("readiness requires the runtime identity, service, twenty migrations, configuration, and all roles", async () => {
+  assert.equal(await checkFor(["TT_APP", "XE", "XEPDB1", 20, 1, 5])(), true);
   for (const row of [
-    ["TT_OWNER", "XE", "XEPDB1", 4, 1, 5],
-    ["TT_APP", "OTHERDB", "XEPDB1", 4, 1, 5],
-    ["TT_APP", "XE", "OTHERPDB", 4, 1, 5],
-    ["TT_APP", "XE", "XEPDB1", 3, 1, 5],
-    ["TT_APP", "XE", "XEPDB1", 4, 0, 5],
-    ["TT_APP", "XE", "XEPDB1", 4, 1, 4],
+    ["TT_OWNER", "XE", "XEPDB1", 20, 1, 5],
+    ["TT_APP", "OTHERDB", "XEPDB1", 20, 1, 5],
+    ["TT_APP", "XE", "OTHERPDB", 20, 1, 5],
+    ["TT_APP", "XE", "XEPDB1", 18, 1, 5],
+    ["TT_APP", "XE", "XEPDB1", 20, 0, 5],
+    ["TT_APP", "XE", "XEPDB1", 20, 1, 4],
   ]) assert.equal(await checkFor(row)(), false);
 });
 
