@@ -16,3 +16,4 @@ build/
 *.log
 npm-debug.log*
 /docs/
+/docs/
