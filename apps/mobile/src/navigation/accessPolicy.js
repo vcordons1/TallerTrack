@@ -19,6 +19,7 @@ const CAPABILITIES = Object.freeze({
   AGENDA_WORKSPACE: "AGENDA_WORKSPACE",
   INVENTORY_WORKSPACE: "INVENTORY_WORKSPACE",
   MANAGEMENT_WORKSPACE: "MANAGEMENT_WORKSPACE",
+  CUSTOMERS_VEHICLES: "CUSTOMERS_VEHICLES",
   ADMIN_DASHBOARD: "ADMIN_DASHBOARD",
 });
 
@@ -96,6 +97,8 @@ function deriveInternalCapabilities(roles = []) {
   ) {
     capabilities.add(CAPABILITIES.AGENDA_WORKSPACE);
     capabilities.add(CAPABILITIES.MANAGEMENT_WORKSPACE);
+    // C01-C05/V01-V08 are explicitly A/R in the domain, not inherited by other roles.
+    capabilities.add(CAPABILITIES.CUSTOMERS_VEHICLES);
   }
 
   if (assignedRoles.has(ROLES.INVENTARIO)) {

@@ -2,6 +2,15 @@ import oracledb from "oracledb";
 
 import { createOracleQueryExecutor } from "../../platform/oracle-query.js";
 
+function customer(row) {
+  return {
+    id: row.id, version: row.version, nombre: row.nombre,
+    telefono: row.telefono ?? null, email: row.email ?? null,
+    direccion: row.direccion ?? null, nit: row.nit ?? null,
+    activo: row.activo === 1, accesoDigital: row.acceso_digital,
+  };
+}
+
 function vehicle(row) {
   return {
     id: row.id,
@@ -40,13 +49,13 @@ export function createOracleCustomerVehicleQueries({ poolManager, schema, driver
         afterDate: input.after?.date ?? null, afterId: input.after?.id ?? null,
         maximum: input.limit + 1,
       }, input.limit + 1);
-      return rows.map((row) => ({
-        id: row.id, version: row.version, nombre: row.nombre,
-        telefono: row.telefono ?? null, email: row.email ?? null,
-        direccion: row.direccion ?? null, nit: row.nit ?? null,
-        activo: row.activo === 1, accesoDigital: row.acceso_digital,
-        _position: { date: row.posicion_fecha, id: row.posicion_id },
-      }));
+      return rows.map((row) => ({ ...customer(row), _position: { date: row.posicion_fecha, id: row.posicion_id } }));
+    },
+    async getCustomer(input) {
+      const rows = await execute("pkg_consultas_clientes_vehiculos.consultar_cliente", {
+        actorId: input.actorId, sessionId: input.sessionId, customerId: input.customerId,
+      }, 1);
+      return rows.length === 0 ? null : customer(rows[0]);
     },
     async listVehicles(input) {
       const rows = await execute("pkg_consultas_clientes_vehiculos.listar_vehiculos", {
@@ -63,6 +72,25 @@ export function createOracleCustomerVehicleQueries({ poolManager, schema, driver
         actorId: input.actorId, sessionId: input.sessionId, vehicleId: input.vehicleId,
       }, 1);
       return rows.length === 0 ? null : vehicle(rows[0]);
+    },
+    async listProperties(input) {
+      const rows = await execute("pkg_consultas_clientes_vehiculos.listar_propiedades", {
+        actorId: input.actorId, sessionId: input.sessionId, vehicleId: input.vehicleId,
+        afterDate: input.after?.date ?? null, afterId: input.after?.id ?? null,
+        maximum: input.limit + 1,
+      }, input.limit + 1);
+      return rows.map((row) => ({
+        id: row.id, clienteId: row.cliente_id, nombreCliente: row.nombre_cliente,
+        desdeEn: row.desde_en, hastaEn: row.hasta_en ?? null, motivo: row.motivo,
+        _position: { date: row.desde_en, id: row.id },
+      }));
+    },
+    async listVehicleTypes(input) {
+      const rows = await execute("pkg_consultas_clientes_vehiculos.listar_tipos_vehiculo", {
+        actorId: input.actorId, sessionId: input.sessionId,
+        includeInactive: input.includeInactive ? 1 : 0,
+      }, 100);
+      return rows.map((row) => ({ codigo: row.codigo, nombre: row.nombre, activo: row.activo === 1 }));
     },
   });
 }

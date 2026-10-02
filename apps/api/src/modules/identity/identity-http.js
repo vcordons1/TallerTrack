@@ -106,7 +106,7 @@ const CONFLICTS = new Set([
 const DOMAIN_FAILURES = new Set([
   "DEUDA_NO_VERIFICABLE", "CLIENTE_NO_DISPONIBLE", "VEHICULO_NO_ENCONTRADO",
   "VEHICULO_NO_DISPONIBLE", "EVIDENCIA_REQUERIDA", "EVIDENCIA_NO_APLICABLE", "EVIDENCIA_INVALIDA",
-  "ALCANCE_NO_AUTORIZADO", "ROL_REQUERIDO", "ULTIMO_ADMINISTRADOR",
+  "ALCANCE_NO_AUTORIZADO", "ROL_REQUERIDO", "ULTIMO_ADMINISTRADOR", "VALIDACION_DOMINIO",
 ]);
 const RECEIPT_FAILURES = new Set([
   "INVALID_UPLOAD_RECEIPT", "UPLOAD_RECEIPT_CONTEXT_MISMATCH", "UPLOAD_RECEIPT_EXPIRED",
@@ -223,7 +223,8 @@ export function apiErrorHandler(error, request, response, _next, logger = consol
     message,
     requestId: request.requestId ?? randomUUID(),
     recuperacion: recovery,
-    fields: [],
+    // Only validated input paths (never values) are echoed; see API contract §2.7.
+    fields: status < 500 && Array.isArray(error?.fields) ? error.fields : [],
     details: {},
   };
   if (request.method !== "GET") body.resultado = status >= 500 ? "DESCONOCIDO" : "NO_CONFIRMADO";

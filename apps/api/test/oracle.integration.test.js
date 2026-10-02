@@ -25,6 +25,7 @@ async function environmentWithPrivateStorage(t, environment) {
     TT_AUTH_SIGNING_KEY_BASE64: Buffer.alloc(32, 0x42).toString("base64"),
     TT_AUTH_ISSUER: "tallertrack-oracle-test",
     TT_AUTH_AUDIENCE: "tallertrack-api-test",
+    TT_QR_PUBLIC_BASE_URL: "https://taller.example",
   };
 }
 

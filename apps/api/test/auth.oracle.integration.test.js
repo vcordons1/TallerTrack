@@ -42,6 +42,7 @@ test("I01-I04 use real Oracle sessions, live roles, rotation, reuse defense and 
       TT_UPLOAD_RECEIPT_TTL_SECONDS: "900",
       TT_AUTH_SIGNING_KEY_BASE64: Buffer.alloc(32, 0x52).toString("base64"),
       TT_AUTH_ISSUER: "tallertrack-auth-test", TT_AUTH_AUDIENCE: "tallertrack-api-test",
+      TT_QR_PUBLIC_BASE_URL: "https://taller.example",
       TT_AUTH_ACCESS_TTL_SECONDS: "600", TT_AUTH_SESSION_TTL_SECONDS: "43200",
       TT_AUTH_REFRESH_TTL_SECONDS: "43200", TT_AUTH_LOGIN_MAX_ATTEMPTS: "5",
       TT_AUTH_LOGIN_WINDOW_SECONDS: "900",

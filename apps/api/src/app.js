@@ -5,6 +5,7 @@ import { createReceptionHttp } from "./modules/reception/reception-http.js";
 import { createOperationalQueryHttp } from "./modules/operational-query-http.js";
 import { createFreeDiagnosticHttp } from "./modules/service-orders/free-diagnostic-http.js";
 import { createInternalUsersHttp } from "./modules/identity/internal-users-http.js";
+import { createCustomerVehicleHttp } from "./modules/customers-vehicles/customer-vehicle-http.js";
 
 export function createApp({
   checkReadiness = async () => false,
@@ -13,6 +14,7 @@ export function createApp({
   openCommercialOrder,
   privateFileConfig,
   customerVehicleQueries,
+  customerVehicleCommands,
   orderQueries,
   cursorCodec,
   freeDiagnosticRepository,
@@ -46,6 +48,14 @@ export function createApp({
     if (internalUsers !== undefined) app.use("/api/v1", createInternalUsersHttp({
       requireAuthenticated: identityHttp.requireAuthenticated, repository: internalUsers, cursorCodec,
     }));
+    if (customerVehicleCommands !== undefined) {
+      app.use("/api/v1", createCustomerVehicleHttp({
+        requireAuthenticated: identityHttp.requireAuthenticated,
+        queries: customerVehicleQueries,
+        commands: customerVehicleCommands,
+        cursorCodec,
+      }).router);
+    }
     if (customerVehicleQueries !== undefined || orderQueries !== undefined) {
       app.use("/api/v1", createOperationalQueryHttp({
         requireAuthenticated: identityHttp.requireAuthenticated,

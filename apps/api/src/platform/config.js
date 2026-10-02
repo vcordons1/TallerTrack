@@ -192,3 +192,19 @@ export function loadAuthConfig(environment = process.env) {
     }),
   });
 }
+
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+// Printed QR URL base: https://{host}/qr/{token}. Plain HTTP is accepted only for the
+// loopback development profile; any other host must use HTTPS (architecture §15).
+export function loadQrPublicConfig(environment = process.env) {
+  const raw = requireValue(environment, "TT_QR_PUBLIC_BASE_URL");
+  let url;
+  try { url = new URL(raw); } catch { throw new Error("TT_QR_PUBLIC_BASE_URL must be an absolute URL"); }
+  const secure = url.protocol === "https:";
+  const loopback = url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname);
+  if ((!secure && !loopback) || url.username || url.password || url.search || url.hash) {
+    throw new Error("TT_QR_PUBLIC_BASE_URL must be HTTPS (HTTP only on loopback) without credentials, query or fragment");
+  }
+  return Object.freeze({ publicBaseUrl: `${url.origin}${url.pathname.replace(/\/+$/, "")}` });
+}

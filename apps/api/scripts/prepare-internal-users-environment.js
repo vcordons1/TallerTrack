@@ -9,6 +9,7 @@ try {
   if (invalid.rows[0][0] !== 0) throw new Error("Invalid package");
   await connection.execute("GRANT EXECUTE ON PKG_DIAGNOSTICO_GRATUITO TO TT_APP");
   await connection.execute("GRANT EXECUTE ON PKG_USUARIOS_INTERNOS TO TT_APP");
+  await connection.execute("GRANT EXECUTE ON PKG_CLIENTES_VEHICULOS_HTTP TO TT_APP");
   const admins = await connection.execute(`SELECT COUNT(*) FROM usuario u WHERE activo=1 AND tipo_actor='INTERNO'
     AND EXISTS (SELECT 1 FROM usuario_rol ur WHERE ur.id_usuario=u.id_usuario AND ur.codigo_rol='ADMINISTRADOR' AND ur.retirado_en IS NULL)`);
   console.log(`ADMIN_REQUIRED=${admins.rows[0][0] === 0 ? 1 : 0}`);

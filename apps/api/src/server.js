@@ -11,6 +11,7 @@ import {
   loadUploadReceiptConfig,
   loadAuthConfig,
   loadBindHost,
+  loadQrPublicConfig,
 } from "./platform/config.js";
 import { createOraclePoolManager } from "./platform/oracle-pool.js";
 import { createPreparedPrivateUpload } from "./platform/prepared-private-upload.js";
@@ -25,6 +26,7 @@ import { createPasswordService } from "./modules/identity/passwords.js";
 import { createTokenService } from "./modules/identity/tokens.js";
 import { createOpaqueCursorCodec } from "./platform/operational-query-contract.js";
 import { createOracleCustomerVehicleQueries } from "./modules/customers-vehicles/oracle-customer-vehicle-queries.js";
+import { createOracleCustomerVehicleCommands } from "./modules/customers-vehicles/oracle-customer-vehicle-commands.js";
 import { createOracleOrderQueries } from "./modules/service-orders/oracle-order-queries.js";
 import { createOracleFreeDiagnostic } from "./modules/service-orders/oracle-free-diagnostic.js";
 import { createInternalUsers } from "./modules/identity/internal-users.js";
@@ -71,6 +73,7 @@ export async function startServer({
 } = {}) {
   const config = loadOracleConfig(environment);
   const authConfig = loadAuthConfig(environment);
+  const qrConfig = loadQrPublicConfig(environment);
   const privateFileConfig = loadPrivateFileConfig(environment);
   const uploadReceiptConfig = loadUploadReceiptConfig(environment);
   const privateFileStorage = createPrivateFileStorage({
@@ -100,6 +103,8 @@ export async function startServer({
     driver,
   });
   const customerVehicleQueries = createOracleCustomerVehicleQueries({ poolManager, schema: config.schema, driver });
+  const customerVehicleCommands = createOracleCustomerVehicleCommands({ poolManager, schema: config.schema, driver,
+    qrPublicBaseUrl: qrConfig.publicBaseUrl });
   const orderQueries = createOracleOrderQueries({ poolManager, schema: config.schema, driver });
   const freeDiagnosticRepository = createOracleFreeDiagnostic({ poolManager, schema: config.schema, driver });
   const cursorCodec = createOpaqueCursorCodec({ hmacKey: authConfig.signingKey });
@@ -117,6 +122,7 @@ export async function startServer({
       openCommercialOrder,
       privateFileConfig,
       customerVehicleQueries,
+      customerVehicleCommands,
       orderQueries,
       freeDiagnosticRepository,
       internalUsers,

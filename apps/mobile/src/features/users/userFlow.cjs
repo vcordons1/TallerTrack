@@ -1,3 +1,4 @@
+const { createCommandIntent } = require("../../api/commandIntent.cjs");
 const INTERNAL_ROLES = Object.freeze(["ADMINISTRADOR", "RECEPCIONISTA", "MECANICO", "INVENTARIO"]);
 function validateUser(body) {
   if (!body.nombreMostrado?.trim() || body.nombreMostrado.length > 200) return "Ingresa el nombre (hasta 200 caracteres).";
@@ -17,25 +18,6 @@ function userError(error) {
     ESTADO_INCOMPATIBLE: "La cuenta ya no está activa. Recarga su detalle.",
   })[error.code] || error.message || "No se pudo completar la operación.";
 }
-function createUserCommand({ request, uuid }) {
-  let pending = null;
-  let sending = false;
-  return {
-    get pending() { return pending !== null; },
-    async run(path, body) {
-      if (sending) throw new Error("La operación ya se está enviando.");
-      pending ||= { path, body: JSON.parse(JSON.stringify(body)), key: uuid() };
-      sending = true;
-      try {
-        const result = await request(pending.path, { method: "POST", body: pending.body,
-          headers: { "Idempotency-Key": pending.key }, uncertainBusinessResult: true });
-        pending = null;
-        return result.data;
-      } catch (error) {
-        if (!error.uncertain) pending = null;
-        throw error;
-      } finally { sending = false; }
-    },
-  };
-}
+// TT-026 reuses the same K-intent semantics for customers and vehicles.
+const createUserCommand = createCommandIntent;
 module.exports = { INTERNAL_ROLES, validateUser, userError, createUserCommand };

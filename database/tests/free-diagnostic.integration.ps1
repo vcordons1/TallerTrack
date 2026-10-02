@@ -120,7 +120,7 @@ commit;
     & $appBootstrap -RuntimeUser $runtime -OwnerSchema $owner -RuntimePassword (As-Secure $runtimePassword) | Out-Null
     $runtimeCreated = $true
     $grants = Sys-Sql "select 'EXECUTES='||count(*) from dba_tab_privs where grantee='$runtime' and owner='$owner' and privilege='EXECUTE';"
-    if ($grants -notmatch 'EXECUTES=9') { throw "Runtime facade grants are incomplete: $grants" }
+    if ($grants -notmatch 'EXECUTES=10') { throw "Runtime facade grants are incomplete: $grants" }
     $env:TT_RUN_FREE_DIAGNOSTIC_ORACLE_INTEGRATION = '1'
     $env:TT_ORACLE_USER = $runtime
     $env:TT_ORACLE_PASSWORD = $runtimePassword

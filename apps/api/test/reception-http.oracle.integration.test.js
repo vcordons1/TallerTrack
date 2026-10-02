@@ -72,6 +72,7 @@ test("login -> E01 -> O02 persists exact bytes and preserves auth, idempotency a
       TT_UPLOAD_RECEIPT_TTL_SECONDS: "300",
       TT_AUTH_SIGNING_KEY_BASE64: Buffer.alloc(32, 0x72).toString("base64"),
       TT_AUTH_ISSUER: "tallertrack-reception-test", TT_AUTH_AUDIENCE: "tallertrack-api-test",
+      TT_QR_PUBLIC_BASE_URL: "https://taller.example",
       TT_AUTH_ACCESS_TTL_SECONDS: "600", TT_AUTH_SESSION_TTL_SECONDS: "43200",
       TT_AUTH_REFRESH_TTL_SECONDS: "43200", TT_AUTH_LOGIN_MAX_ATTEMPTS: "20",
       TT_AUTH_LOGIN_WINDOW_SECONDS: "900", TT_AUTH_LOGIN_BUCKET_CAPACITY: "5000",
