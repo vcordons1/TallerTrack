@@ -1,6 +1,6 @@
 import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -8,7 +8,7 @@ import { ScreenContainer } from "../../components/ScreenContainer";
 import { colors, radii, spacing, typography } from "../../theme/tokens";
 import { receptionRepository } from "./receptionRepository";
 
-const { createReceptionFlow, assertCurrentVehicle } = require("./receptionFlow.cjs");
+const { NO_DAMAGE_TEXT, createReceptionFlow, assertCurrentVehicle } = require("./receptionFlow.cjs");
 const { createReceptionPhoto } = require("./photoUpload.cjs");
 const { receptionMessage } = require("./receptionMessage.cjs");
 
@@ -20,8 +20,26 @@ function Action({ label, onPress, secondary = false, disabled = false }) {
   </Pressable>;
 }
 
+const PHASE_TEXT = Object.freeze({
+  PREPARANDO: "Subiendo la fotografía al almacenamiento privado…",
+  PREPARADA: "Evidencia preparada. Es temporal: todavía no existe ninguna orden.",
+  ENVIANDO: "Enviando la recepción al servidor…",
+  VERIFICANDO: "Recepción aceptada. Verificando la orden creada…",
+  INCIERTO: "Resultado desconocido. La orden pudo haberse creado: verifica antes de cualquier otra acción.",
+});
+
+function expiryLabel(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export function ReceptionScreen() {
+  const params = useLocalSearchParams();
+  const presetVehicleId = Array.isArray(params.vehiculoId) ? params.vehiculoId[0] : params.vehiculoId;
   const flow = useRef(createReceptionFlow({ repository: receptionRepository, uuid: Crypto.randomUUID })).current;
+  const [, setFlowVersion] = useState(0);
+  const touch = () => setFlowVersion((value) => value + 1);
+  const [activeOrderId, setActiveOrderId] = useState(null);
   const submitting = useRef(false);
   const customerGeneration = useRef(0);
   const [search, setSearch] = useState("");
@@ -39,7 +57,26 @@ export function ReceptionScreen() {
   const [photo, setPhoto] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const locked = flow.hasPending;
+  const locked = flow.hasPending || busy;
+  const prepared = flow.prepared;
+
+  // Started from a vehicle detail: owner and property still come from the server (V03).
+  useEffect(() => {
+    if (!presetVehicleId) return;
+    let active = true;
+    receptionRepository.getVehicle(presetVehicleId).then((current) => {
+      if (!active) return;
+      setCustomer({ id: current.propiedadActual?.clienteId, nombre: current.propiedadActual?.nombreCliente });
+      try {
+        assertCurrentVehicle(current, current.propiedadActual?.clienteId);
+        setVehicle(current);
+      } catch (failure) {
+        setError(failure.message);
+        if (failure.details?.ordenId) setActiveOrderId(failure.details.ordenId);
+      }
+    }, () => { if (active) setError("No se pudo cargar el vehículo. Vuelve a seleccionarlo."); });
+    return () => { active = false; };
+  }, [presetVehicleId]);
 
   useEffect(() => {
     if (customer || search.trim().length < 2) { setCustomers([]); setSearchState("idle"); return; }
@@ -89,10 +126,15 @@ export function ReceptionScreen() {
     try {
       const current = await receptionRepository.getVehicle(item.id);
       if (generation !== customerGeneration.current) return;
+      setActiveOrderId(null);
       assertCurrentVehicle(current, customer.id);
       setVehicle(current);
-      setPhoto(null); flow.reset();
-    } catch (failure) { if (generation === customerGeneration.current) setError(failure.message || "No se pudo verificar el vehículo."); }
+      setPhoto(null); flow.reset(); touch();
+    } catch (failure) {
+      if (generation !== customerGeneration.current) return;
+      setError(failure.message || "No se pudo verificar el vehículo.");
+      if (failure.details?.ordenId) setActiveOrderId(failure.details.ordenId);
+    }
   }
 
   async function choosePhoto(source) {
@@ -109,28 +151,45 @@ export function ReceptionScreen() {
       if (!result.canceled && result.assets?.[0]?.uri) {
         const asset = result.assets[0];
         setPhoto(createReceptionPhoto(asset));
-        flow.reset();
+        flow.reset(); touch();
       }
     } catch (failure) { setError(failure.code === "PHOTO_FORMAT_UNSUPPORTED"
       ? failure.message : "No se pudo preparar la fotografía. Intenta de nuevo."); }
   }
 
+  async function prepareEvidence() {
+    if (submitting.current) return;
+    submitting.current = true;
+    setBusy(true); setError(""); touch();
+    try {
+      await flow.prepare({ customerId: customer.id, vehicleId: vehicle.id, photo });
+    } catch (failure) {
+      handleFailure(failure);
+    } finally { submitting.current = false; setBusy(false); touch(); }
+  }
+
+  function handleFailure(failure) {
+    if (failure.code === "PROPIEDAD_CAMBIADA") {
+      // Human review: reload the customer's current vehicles; never retry with the new owner.
+      setVehicle(null); setPhoto(null); flow.reset();
+      if (customer) void chooseCustomer(customer);
+    }
+    if (failure.code === "ORDEN_ACTIVA_EXISTENTE" && failure.details?.ordenId) setActiveOrderId(failure.details.ordenId);
+    setError(receptionMessage(failure));
+  }
+
   async function submit() {
     if (submitting.current) return;
     submitting.current = true;
-    setBusy(true); setError("");
+    setBusy(true); setError(""); touch();
     try {
       const order = await flow.submit({ customerId: customer.id, vehicleId: vehicle.id,
-        kilometrajeIngreso: km, motivoIngreso: reason, danosVisibles: damage, photo });
+        kilometrajeIngreso: km, motivoIngreso: reason, danosVisibles: damage });
       if (order) router.replace({ pathname: "/interno/ordenes/[id]", params: { id: order.id } });
     } catch (failure) {
-      if (failure.code === "PROPIEDAD_CAMBIADA") {
-        setVehicle(null); setPhoto(null); flow.reset();
-      }
-      setError(flow.hasPending
-        ? "El resultado aún no está verificado. Pulsa verificar para consultar o reintentar esta misma orden."
-        : receptionMessage(failure));
-    } finally { submitting.current = false; setBusy(false); }
+      if (flow.hasPending) setError(receptionMessage({ uncertain: true }));
+      else handleFailure(failure);
+    } finally { submitting.current = false; setBusy(false); touch(); }
   }
 
   return <ScreenContainer fullSafeArea>
@@ -157,7 +216,7 @@ export function ReceptionScreen() {
 
       {customer ? <><Text style={styles.section}>2 · Vehículo actual</Text>
         {loadingVehicles ? <ActivityIndicator color={colors.primary} /> : null}
-        {!loadingVehicles && vehicles.length === 0 ? <Text style={styles.supporting}>Este cliente no tiene vehículos actuales disponibles.</Text> : null}
+        {!vehicle && !loadingVehicles && vehicles.length === 0 ? <Text style={styles.supporting}>Este cliente no tiene vehículos actuales disponibles.</Text> : null}
         {!vehicle && vehicles.map((item) => <Pressable key={item.id} accessibilityRole="button" onPress={() => chooseVehicle(item)} style={styles.row}>
           <Text style={styles.strong}>{item.placa || "Sin placa"} · {item.marca} {item.modelo}</Text>
           <Text style={styles.supporting}>{item.tipoVehiculo}{item.anio ? ` · ${item.anio}` : ""}</Text>
@@ -177,17 +236,45 @@ export function ReceptionScreen() {
           style={[styles.input, styles.multiline]} maxLength={2000} />
         <Text style={styles.label}>Daños visibles</Text>
         <TextInput accessibilityLabel="Daños visibles" multiline editable={!locked} value={damage} onChangeText={setDamage}
-          style={[styles.input, styles.multiline]} maxLength={2000} placeholder="Escribe 'Sin daños visibles' cuando corresponda" />
-        <Text style={styles.section}>4 · Fotografía de recepción</Text>
-        <Text style={styles.supporting}>Evidencia privada del estado del vehículo al ingresar.</Text>
+          style={[styles.input, styles.multiline]} maxLength={2000} placeholder="Describe los daños o declara que no hay" />
+        <Action secondary disabled={locked} label={`Declarar: ${NO_DAMAGE_TEXT}`} onPress={() => setDamage(NO_DAMAGE_TEXT)} />
+        <Text style={styles.section}>4 · Evidencia de recepción</Text>
+        <Text style={styles.supporting}>Fotografía privada del estado del vehículo al ingresar. Prepararla no abre la orden.</Text>
         {photo ? <Image accessibilityLabel="Vista previa de la fotografía de recepción" source={{ uri: photo.uri }} style={styles.preview} /> : null}
         <Action secondary disabled={locked} label={photo ? "Reemplazar con cámara" : "Tomar fotografía"} onPress={() => choosePhoto("camera")} />
         <Action secondary disabled={locked} label="Seleccionar de galería" onPress={() => choosePhoto("gallery")} />
-        {photo ? <Action secondary disabled={locked} label="Eliminar fotografía" onPress={() => { setPhoto(null); flow.reset(); }} /> : null}
+        {photo ? <Action secondary disabled={locked} label="Eliminar fotografía" onPress={() => { setPhoto(null); flow.reset(); touch(); }} /> : null}
+        {photo && !prepared ? <Action disabled={locked} label={flow.phase === "PREPARANDO" ? "Preparando evidencia…" : "Preparar evidencia"}
+          onPress={prepareEvidence} /> : null}
+        {flow.phase === "PREPARANDO" ? <ActivityIndicator color={colors.primary} /> : null}
+        {prepared ? <View accessibilityLabel="Evidencia preparada" style={styles.selected}>
+          <Text style={styles.strong}>Evidencia preparada</Text>
+          <Text style={styles.supporting}>{`Temporal hasta las ${expiryLabel(prepared.expiresAt)}. Si vence, deberás prepararla de nuevo.`}</Text>
+        </View> : null}
+
+        {prepared ? <><Text style={styles.section}>5 · Revisar y confirmar</Text>
+          <View style={styles.summary}>
+            <Text style={styles.supporting}>{`Cliente: ${customer.nombre ?? ""}`}</Text>
+            <Text style={styles.supporting}>{`Vehículo: ${vehicle.placa || "Sin placa"} · ${vehicle.marca} ${vehicle.modelo}`}</Text>
+            <Text style={styles.supporting}>{`Kilometraje: ${km.trim() || "pendiente"}`}</Text>
+            <Text style={styles.supporting}>{`Motivo: ${reason.trim() || "pendiente"}`}</Text>
+            <Text style={styles.supporting}>{`Daños visibles: ${damage.trim() || "pendiente"}`}</Text>
+            <Text style={styles.supporting}>Evidencia: 1 fotografía preparada</Text>
+          </View>
+        </> : null}
+        {PHASE_TEXT[flow.phase] ? <Text accessibilityLiveRegion="polite" style={flow.phase === "INCIERTO" ? styles.warning : styles.supporting}>
+          {PHASE_TEXT[flow.phase]}</Text> : null}
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-        <Action label={busy ? "Creando orden…" : flow.hasPending ? "Verificar o reintentar orden" : "Crear orden"}
-          disabled={busy} onPress={submit} />
-      </> : error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+        {activeOrderId ? <Action secondary label={`Ver orden activa #${activeOrderId}`}
+          onPress={() => router.push({ pathname: "/interno/ordenes/[id]", params: { id: String(activeOrderId) } })} /> : null}
+        {prepared || flow.hasPending ? <Action disabled={busy}
+          label={busy && flow.phase !== "PREPARANDO" ? "Enviando…" : flow.hasPending ? "Verificar esta misma recepción" : "Confirmar recepción"}
+          onPress={submit} /> : null}
+      </> : <>
+        {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+        {activeOrderId ? <Action secondary label={`Ver orden activa #${activeOrderId}`}
+          onPress={() => router.push({ pathname: "/interno/ordenes/[id]", params: { id: String(activeOrderId) } })} /> : null}
+      </>}
     </KeyboardAvoidingView>
   </ScreenContainer>;
 }
@@ -215,4 +302,7 @@ const styles = StyleSheet.create({
   actionText: { ...typography.bodyStrong, color: colors.onPrimary, textAlign: "center" },
   secondaryText: { color: colors.primary },
   error: { ...typography.supporting, color: colors.danger, paddingVertical: spacing.sm },
+  warning: { ...typography.bodyStrong, color: colors.danger, paddingVertical: spacing.sm },
+  summary: { padding: spacing.lg, gap: spacing.xs, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md,
+    backgroundColor: colors.surface },
 });

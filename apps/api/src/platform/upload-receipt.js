@@ -196,7 +196,14 @@ export function createUploadReceiptSigner({
     if (payload.actorId !== expectedActor || !sameContext(payload.context, expectedNormalizedContext)) {
       reject("UPLOAD_RECEIPT_CONTEXT_MISMATCH");
     }
-    if (nowMilliseconds(now) >= payload.expiresAt) reject("UPLOAD_RECEIPT_EXPIRED");
+    if (nowMilliseconds(now) >= payload.expiresAt) {
+      // Signature, actor and context are already proven. The payload travels with the
+      // rejection only so a K command can resolve an intention it already confirmed;
+      // an expired receipt never authorizes consuming its object again.
+      const expired = new UploadReceiptError("UPLOAD_RECEIPT_EXPIRED", "The upload receipt is invalid");
+      Object.defineProperty(expired, "authenticatedPayload", { value: payload, enumerable: false });
+      throw expired;
+    }
     return payload;
   }
 

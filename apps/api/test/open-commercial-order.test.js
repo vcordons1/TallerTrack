@@ -76,7 +76,7 @@ test("all receipts are context-checked and revalidated before one Oracle transac
 
   assert.deepEqual(result, {
     orderId: "700", state: "RECIBIDO", version: 1, contractualClientId: "200",
-    openingPropertyId: "1100", evidenceIds: [800, 801], repeated: false,
+    openingPropertyId: "1100", appointmentId: null, evidenceIds: [800, 801], repeated: false,
     commandId: "900", confirmedAt: "2026-09-12T10:00:00.000000Z",
   });
   assert.deepEqual(events.map(([name]) => name), ["verify", "verify", "connection", "execute", "commit", "close"]);
@@ -119,4 +119,103 @@ test("the internal DTO rejects missing evidence, arbitrary timestamps and caller
   await assert.rejects(open(request({ state: "ENTREGADO" })), { code: "INVALID_ORDER_OPENING" });
   await assert.rejects(open(request({ enteredAt: new Date().toISOString() })), { code: "INVALID_ORDER_OPENING" });
   assert.deepEqual(events, []);
+});
+
+function expiredError(suffix = "a") {
+  const error = Object.assign(new Error("expired"), { code: "UPLOAD_RECEIPT_EXPIRED" });
+  Object.defineProperty(error, "authenticatedPayload", { value: payload(suffix), enumerable: false });
+  return error;
+}
+
+function lookupHarness({ found }) {
+  const events = [];
+  const connection = {
+    async execute(sql, binds) {
+      events.push(["execute", sql, binds]);
+      return { outBinds: found ? {
+        found: 1, orderId: "700", state: "RECIBIDO", version: "1", clientId: "200", propertyId: "1100",
+        evidenceIdsJson: "[800]", appointmentId: null, commandId: "900", confirmedAt: "2026-09-12T10:00:00.000000Z",
+      } : { found: 0 } };
+    },
+    async commit() { events.push(["commit"]); },
+    async rollback() { events.push(["rollback"]); },
+    async close() { events.push(["close"]); },
+  };
+  const expired = expiredError();
+  return {
+    events,
+    expired,
+    open: createOpenCommercialOrder({
+      preparedUpload: { async verifyAndRevalidate() { events.push(["verify"]); throw expired; } },
+      poolManager: { async getConnection() { events.push(["connection"]); return connection; } },
+      schema: "TT_OWNER", maximumFiles: 10, driver,
+    }),
+  };
+}
+
+test("an expired but authentic receipt only resolves an intention Oracle already confirmed", async () => {
+  const { events, open } = lookupHarness({ found: true });
+  const result = await open(request());
+  assert.equal(result.orderId, "700");
+  assert.equal(result.repeated, true);
+  assert.deepEqual(events.map(([name]) => name), ["verify", "connection", "execute", "rollback", "close"]);
+  const [, sql, binds] = events.find(([name]) => name === "execute");
+  assert.match(sql, /consultar_apertura_confirmada/);
+  assert.doesNotMatch(sql, /abrir_orden_comercial/);
+  assert.equal(binds.sessionId, "400");
+});
+
+test("an expired receipt without a confirmed intention stays rejected and opens nothing", async () => {
+  const { events, open, expired } = lookupHarness({ found: false });
+  await assert.rejects(open(request()), (error) => error === expired);
+  assert.equal(events.some(([name]) => name === "commit"), false);
+  assert.match(events.find(([name]) => name === "execute")[1], /consultar_apertura_confirmada/);
+});
+
+test("any non-expiry receipt failure wins over expiry and never reaches Oracle", async () => {
+  const events = [];
+  const tampered = Object.assign(new Error("tampered"), { code: "INVALID_UPLOAD_RECEIPT" });
+  const open = createOpenCommercialOrder({
+    preparedUpload: {
+      async verifyAndRevalidate({ receipt }) {
+        events.push("verify");
+        throw receipt.endsWith("b") ? tampered : expiredError();
+      },
+    },
+    poolManager: { async getConnection() { events.push("connection"); throw new Error("must not run"); } },
+    schema: "TT_OWNER", maximumFiles: 10, driver,
+  });
+  await assert.rejects(open(request({
+    receptionEvidence: [{ receipt: "signed-a", description: "A" }, { receipt: "signed-b", description: "B" }],
+  })), (error) => error === tampered);
+  assert.deepEqual(events, ["verify", "verify"]);
+});
+
+test("the optional appointment travels as a pair and changes the request fingerprint", async () => {
+  const plain = harness();
+  await plain.open(request());
+  const withAppointment = harness();
+  await withAppointment.open(request({ appointmentId: "8001", appointmentExpectedVersion: "2" }));
+  const plainBinds = plain.events.find(([name]) => name === "execute")[2];
+  const appointmentBinds = withAppointment.events.find(([name]) => name === "execute")[2];
+  assert.equal(plainBinds.appointmentIn, null);
+  assert.equal(appointmentBinds.appointmentIn, "8001");
+  assert.equal(appointmentBinds.appointmentVersion, "2");
+  assert.notDeepEqual(plainBinds.requestHash, appointmentBinds.requestHash);
+
+  const { events, open } = harness();
+  await assert.rejects(open(request({ appointmentId: "8001" })), { code: "INVALID_ORDER_OPENING" });
+  await assert.rejects(open(request({ appointmentExpectedVersion: "2" })), { code: "INVALID_ORDER_OPENING" });
+  await assert.rejects(open(request({ appointmentId: "8001", appointmentExpectedVersion: "0" })), { code: "INVALID_ORDER_OPENING" });
+  await assert.rejects(open(request({ sessionId: null })), { code: "INVALID_ORDER_OPENING" });
+  assert.deepEqual(events, []);
+});
+
+test("facade errors expose only a consultable order id or the offending input path", async () => {
+  const active = harness({ executeError: new Error("ORA-20030: ORDEN_ACTIVA_EXISTENTE ordenId=5003") });
+  await assert.rejects(active.open(request()), (error) => error.code === "ORDEN_ACTIVA_EXISTENTE"
+    && error.details.ordenId === "5003" && error.fields === undefined);
+  const appointment = harness({ executeError: new Error("ORA-20033: VALIDACION_DOMINIO /citaId") });
+  await assert.rejects(appointment.open(request({ appointmentId: "8001", appointmentExpectedVersion: "2" })),
+    (error) => error.code === "VALIDACION_DOMINIO" && error.fields[0].path === "/citaId" && error.details === undefined);
 });

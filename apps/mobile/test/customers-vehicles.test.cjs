@@ -298,6 +298,26 @@ test("vehicle detail shows current owner and QR state without any secret; transf
   await act(async () => tree.unmount());
 });
 
+test("vehicle detail starts a reception only for RECEPCIONISTA and only without an active order", async () => {
+  for (const [roles, activeOrder, expected] of [
+    [["RECEPCIONISTA"], null, true], [["ADMINISTRADOR"], null, false], [["RECEPCIONISTA"], "44", false],
+  ]) {
+    const h = harness({ roles, params: { id: "9" }, request: async (url) => {
+      if (url === "/interno/tipos-vehiculo") return { data: types };
+      return { data: { ...vehicle, ordenActivaId: activeOrder } };
+    } });
+    const tree = await mount(h.vehicles.VehicleDetailScreen);
+    const action = pressable(tree, "Nueva recepción");
+    assert.equal(action !== undefined, expected, `${roles} / ${activeOrder}`);
+    if (action) {
+      await act(async () => action.props.onPress());
+      assert.deepEqual(plain(h.moves.at(-1)), { pathname: "/interno/ordenes/nueva", params: { vehiculoId: "9" } });
+    }
+    if (activeOrder) assert.ok(content(tree).includes("Ver orden activa #44"));
+    await act(async () => tree.unmount());
+  }
+});
+
 test("roles without the capability cannot render customer/vehicle maintenance", async () => {
   for (const roles of [["MECANICO"], ["INVENTARIO"]]) {
     const h = harness({ roles, request: async () => { throw new Error("must not query"); } });

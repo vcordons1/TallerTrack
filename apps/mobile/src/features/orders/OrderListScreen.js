@@ -53,7 +53,7 @@ export function OrderListScreen({ repository = demoOrderRepository, realReceptio
     let active = true;
     if (!refreshing) setState({ status: "loading" });
 
-    const load = realOrders ? repository.loadPage(orderView) : repository.loadList(orderView).then((orders) => ({ orders, cursor: null }));
+    const load = realOrders ? repository.loadPage(orderView, null, { filter }) : repository.loadList(orderView).then((orders) => ({ orders, cursor: null }));
     load.then(
       ({ orders, cursor }) => {
         if (active) {
@@ -74,7 +74,8 @@ export function OrderListScreen({ repository = demoOrderRepository, realReceptio
     return () => {
       active = false;
     };
-  }, [orderView, reloadKey, repository, realOrders]);
+    // Real queues reload from O01 when the filter changes; demo data filters locally.
+  }, [orderView, reloadKey, repository, realOrders, realOrders ? filter : null]);
 
   const visibleOrders = useMemo(
     () => filterOrders(state.status === "success" ? state.orders : [], filter),
@@ -89,14 +90,14 @@ export function OrderListScreen({ repository = demoOrderRepository, realReceptio
     if (!nextCursor || loadingMore || state.status !== "success") return;
     setLoadingMore(true);
     try {
-      const page = await repository.loadPage(orderView, nextCursor);
+      const page = await repository.loadPage(orderView, nextCursor, { filter });
       setState((current) => current.status === "success"
         ? { status: "success", orders: [...current.orders, ...page.orders] } : current);
       setNextCursor(page.cursor);
       setPageError(false);
     } catch { setPageError(true); }
     finally { setLoadingMore(false); }
-  }, [nextCursor, loadingMore, state.status, repository, orderView]);
+  }, [nextCursor, loadingMore, state.status, repository, orderView, filter]);
 
   if (state.status === "loading") {
     return <SafeAreaView edges={["top", "right", "bottom", "left"]} style={styles.safeArea}><OrdersLoading /></SafeAreaView>;

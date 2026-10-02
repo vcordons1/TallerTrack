@@ -23,8 +23,9 @@ test("real filesystem receipt is consumed by T01 through one real Oracle connect
   const storage = createPrivateFileStorage({ rootDirectory: root, maxFileBytes: 1024 * 1024 });
   await storage.initialize();
   const validator = createTechnicalImageValidator({ maxPixels: 1_000_000, maxDimension: 2000 });
+  let clock = Date.now();
   const receiptSigner = createUploadReceiptSigner({
-    hmacKey: Buffer.alloc(32, 0x54), ttlSeconds: 300,
+    hmacKey: Buffer.alloc(32, 0x54), ttlSeconds: 300, now: () => clock,
   });
   const preparedUpload = createPreparedPrivateUpload({
     storage, validateTechnicalImage: validator, receiptSigner,
@@ -59,6 +60,7 @@ test("real filesystem receipt is consumed by T01 through one real Oracle connect
   });
   const command = {
     actorId: process.env.TT_T01_ACTOR_ID,
+    sessionId: process.env.TT_T01_SESSION_ID,
     idempotencyKey: "node-real-filesystem-oracle",
     correlationId: "node-real-filesystem-oracle",
     vehicleId: context.vehiculoId,
@@ -80,4 +82,14 @@ test("real filesystem receipt is consumed by T01 through one real Oracle connect
   assert.deepEqual(retried.evidenceIds, created.evidenceIds);
   assert.equal(retried.repeated, true);
   assert.equal(await storage.exists(prepared.objectKey), true);
+
+  // Lost response + expired receipt: the same intention resolves to the same order
+  // through the read-only lookup; a new intention with that receipt is still refused.
+  clock += 301_000;
+  const afterExpiry = await open(command);
+  assert.equal(afterExpiry.orderId, created.orderId);
+  assert.deepEqual(afterExpiry.evidenceIds, created.evidenceIds);
+  assert.equal(afterExpiry.repeated, true);
+  await assert.rejects(open({ ...command, idempotencyKey: "node-expired-new-intention" }), { code: "UPLOAD_RECEIPT_EXPIRED" });
+  await assert.rejects(open({ ...command, entryReason: "Otro contenido" }), { code: "CLAVE_REUTILIZADA" });
 });

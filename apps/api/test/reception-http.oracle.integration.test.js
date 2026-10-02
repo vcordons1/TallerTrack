@@ -184,7 +184,7 @@ test("login -> E01 -> O02 persists exact bytes and preserves auth, idempotency a
             if (typeof value === "string") form.append(name, value);
             else form.append(name, new Blob([await value.bytes()], { type: value.type }), value.name);
           }
-          return (await client.request("/interno/evidencias/cargar", { method: "POST", body: form })).data.recibo;
+          return (await client.request("/interno/evidencias/cargar", { method: "POST", body: form })).data;
         },
         async open(body, idempotencyKey) {
           sentBody = body;
@@ -199,10 +199,17 @@ test("login -> E01 -> O02 persists exact bytes and preserves auth, idempotency a
         },
       },
     });
+    // Two human steps: E01 prepares a temporary file (no order yet), then O02 confirms.
+    const preparedEvidence = await mobileReception.prepare({
+      customerId: customer.id, vehicleId: searchedVehicle.id, photo: { uri: "file:///camera.png", bytes },
+    });
+    assert.equal(mobileReception.phase, "PREPARADA");
+    assert.equal(Date.parse(preparedEvidence.expiresAt) > Date.now(), true);
+    const beforeConfirm = await owner.execute("SELECT COUNT(*) FROM orden_trabajo WHERE id_vehiculo=:id", { id: searchedVehicle.id });
+    assert.equal(beforeConfirm.rows[0][0], 0);
     const confirmedDetail = await mobileReception.submit({
       customerId: customer.id, vehicleId: searchedVehicle.id, kilometrajeIngreso: "321.0",
       motivoIngreso: "Recepción HTTP Oracle", danosVisibles: "Sin daños visibles",
-      photo: { uri: "file:///camera.png", bytes },
     });
     assert.equal(confirmedDetail.id, first.data.ordenId);
     first = { response: { status: 201 }, body: first };
@@ -294,6 +301,8 @@ test("login -> E01 -> O02 persists exact bytes and preserves auth, idempotency a
     const raceCount = await owner.execute("SELECT COUNT(*) FROM orden_trabajo WHERE id_vehiculo=1001");
     assert.equal(raceCount.rows[0][0], 1);
     const otherOrderId = race.find(({ response }) => response.status === 201).body.data.ordenId;
+    // The loser learns which consultable order already holds the vehicle.
+    assert.deepEqual(race.find(({ response }) => response.status === 409).body.error.details, { ordenId: otherOrderId });
     const firstOrderPage = await getJson(`${baseUrl}/interno/ordenes?limite=1`, token);
     assert.equal(firstOrderPage.response.status, 200);
     assert.equal(firstOrderPage.body.data.length, 1);

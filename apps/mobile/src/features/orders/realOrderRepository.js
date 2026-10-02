@@ -1,9 +1,10 @@
 import { api } from "../../api/runtime";
 
+const { orderListQuery } = require("./orderListQuery.cjs");
+
 export const realOrderRepository = Object.freeze({
-  async loadPage(view, cursor) {
-    const suffix = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
-    const result = await api.request(`/interno/ordenes?vista=${encodeURIComponent(view)}&limite=25${suffix}`);
+  async loadPage(view, cursor, filters = {}) {
+    const result = await api.request(`/interno/ordenes?${orderListQuery(view, cursor, filters)}`);
     return { orders: result.data, cursor: result.page?.siguienteCursor || null };
   },
   async loadDetail(id, view) {

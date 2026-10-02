@@ -20,7 +20,7 @@ $runtimeCreated = $false
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('tallertrack-t01-' + [guid]::NewGuid().ToString('N'))
 $throughV013 = Join-Path $tempRoot 'through-v013'
 $saved = @{}
-foreach ($name in 'TT_DB_URL','TT_DB_USER','TT_DB_PASSWORD','FLYWAY_LOCATIONS','TT_RUN_T01_ORACLE_INTEGRATION','TT_ORACLE_USER','TT_ORACLE_PASSWORD','TT_ORACLE_CONNECT_STRING','TT_ORACLE_SCHEMA','TT_T01_ACTOR_ID','TT_T01_VEHICLE_ID','TT_T01_PROPERTY_ID','TT_T01_OWNER_ID') {
+foreach ($name in 'TT_DB_URL','TT_DB_USER','TT_DB_PASSWORD','FLYWAY_LOCATIONS','TT_RUN_T01_ORACLE_INTEGRATION','TT_ORACLE_USER','TT_ORACLE_PASSWORD','TT_ORACLE_CONNECT_STRING','TT_ORACLE_SCHEMA','TT_T01_ACTOR_ID','TT_T01_VEHICLE_ID','TT_T01_PROPERTY_ID','TT_T01_OWNER_ID','TT_T01_SESSION_ID') {
     $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
 
@@ -145,18 +145,18 @@ try {
     $second = Invoke-Flyway 'migrate'
     $validate = Invoke-Flyway 'validate'
     Assert-Output 'second migration is idempotent' $second 'Schema .* is up to date|No migration necessary'
-    Assert-Output 'current migrations validate' $validate 'Successfully validated 21 migrations'
+    Assert-Output 'current migrations validate' $validate 'Successfully validated 22 migrations'
 
     $packageEvidence = Invoke-SysSql @"
-select 'VALID='||count(*) from all_objects where owner='$schema' and object_name='PKG_ORDENES' and object_type in ('PACKAGE','PACKAGE BODY') and status='VALID';
-select 'ERRORS='||count(*) from all_errors where owner='$schema' and name='PKG_ORDENES';
+select 'VALID='||count(*) from all_objects where owner='$schema' and object_name in ('PKG_ORDENES','PKG_RECEPCION_HTTP') and object_type in ('PACKAGE','PACKAGE BODY') and status='VALID';
+select 'ERRORS='||count(*) from all_errors where owner='$schema' and name in ('PKG_ORDENES','PKG_RECEPCION_HTTP');
 "@
-    Assert-Output 'package validity' $packageEvidence 'VALID=2'
+    Assert-Output 'package validity' $packageEvidence 'VALID=4'
     Assert-Output 'package compilation errors' $packageEvidence 'ERRORS=0'
 
     Invoke-OwnerSql @"
 insert into usuario(id_usuario,tipo_actor,login_normalizado,nombre_mostrado,credencial_hash,version_credencial,activo,creado_en,actualizado_en,version_fila)
- values(100,'INTERNO','t01.recepcion','Recepcion T01','TEST_ONLY',1,1,systimestamp,systimestamp,1);
+ values(100,'INTERNO','t01.recepcion','Recepcion T01','TEST_ONLY',2,1,systimestamp,systimestamp,1);
 insert into usuario(id_usuario,tipo_actor,login_normalizado,nombre_mostrado,credencial_hash,version_credencial,activo,creado_en,actualizado_en,version_fila)
  values(101,'INTERNO','t01.admin','Admin T01','TEST_ONLY',1,1,systimestamp,systimestamp,1);
 insert into usuario(id_usuario,tipo_actor,login_normalizado,nombre_mostrado,credencial_hash,version_credencial,activo,creado_en,actualizado_en,version_fila)
@@ -164,6 +164,12 @@ insert into usuario(id_usuario,tipo_actor,login_normalizado,nombre_mostrado,cred
 insert into usuario_rol(id_usuario_rol,id_usuario,codigo_rol,asignado_en,asignado_por) values(1000,100,'RECEPCIONISTA',systimestamp,100);
 insert into usuario_rol(id_usuario_rol,id_usuario,codigo_rol,asignado_en,asignado_por) values(1001,101,'ADMINISTRADOR',systimestamp,100);
 insert into usuario_rol(id_usuario_rol,id_usuario,codigo_rol,asignado_en,asignado_por) values(1002,102,'RECEPCIONISTA',systimestamp,100);
+insert into sesion(id_sesion,id_usuario,identificador_publico,creada_en,expira_en,version_credencial)
+ values(7000,100,hextoraw('70000000000000000000000000000000'),systimestamp,systimestamp+interval '1' day,2);
+insert into sesion(id_sesion,id_usuario,identificador_publico,creada_en,expira_en,version_credencial)
+ values(7001,100,hextoraw('70010000000000000000000000000000'),systimestamp,systimestamp+interval '1' day,1);
+insert into sesion(id_sesion,id_usuario,identificador_publico,creada_en,expira_en,version_credencial)
+ values(7002,101,hextoraw('70020000000000000000000000000000'),systimestamp,systimestamp+interval '1' day,1);
 begin
   for i in 200..205 loop
     insert into cliente(id_cliente,nombre,activo,creado_en,creado_por,actualizado_en,actualizado_por,version_fila)
@@ -177,7 +183,7 @@ insert into usuario_rol(id_usuario_rol,id_usuario,codigo_rol,asignado_en,asignad
 insert into comando(id_comando,ambito,clave_idempotencia,solicitud_hash,tipo_operacion,id_actor,registrado_en,resultado_codigo)
  values(9000,'fixture/T01','fixture',$hOpen,'PRUEBA_T01',100,systimestamp,200);
 begin
-  for i in 0..13 loop
+  for i in 0..18 loop
     insert into vehiculo(id_vehiculo,codigo_tipo,marca,modelo,activo,creado_en,creado_por,actualizado_en,actualizado_por,version_fila)
       values(1000+i,'AUTOMOVIL','Marca','Modelo '||i,case when i=9 then 0 else 1 end,systimestamp,100,systimestamp,100,1);
     insert into propiedad_vehiculo(id_propiedad,id_vehiculo,id_cliente,desde_en,motivo,registrado_por,id_comando)
@@ -192,6 +198,19 @@ insert into orden_trabajo(id_orden,id_vehiculo,id_propiedad_apertura,id_cliente,
 insert into orden_trabajo(id_orden,id_vehiculo,id_propiedad_apertura,id_cliente,proposito,ingresado_en,kilometraje_ingreso,motivo_ingreso,danos_visibles,estado,version_fila,creado_por,id_comando)
  values(5003,1008,1108,200,'COMERCIAL',systimestamp,1,'Activa previa','Sin danos','RECIBIDO',1,100,9000);
 update propiedad_vehiculo set hasta_en=systimestamp-interval '1' second,cerrado_por=100 where id_propiedad=1103;
+begin
+  for c in (select 8001 id,1014 veh,'CONFIRMADA' est,2 ver from dual union all
+            select 8002,1015,'CONFIRMADA',2 from dual union all
+            select 8003,1016,'ATENDIDA',3 from dual union all
+            select 8004,1017,'SOLICITADA',1 from dual union all
+            select 8005,1018,'CONFIRMADA',2 from dual) loop
+    insert into cita(id_cita,id_vehiculo,origen,nombre_solicitante,contacto_solicitante,motivo,solicitada_en,inicio_solicitado,inicio_programado,fin_programado,estado,version_fila)
+      values(c.id,c.veh,'PERSONAL','Solicitante T01','contacto@t01.test','Cita T01',systimestamp-interval '2' day,systimestamp,
+             case when c.est='SOLICITADA' then null else systimestamp end,
+             case when c.est='SOLICITADA' then null else systimestamp+interval '1' hour end,c.est,c.ver);
+  end loop;
+end;
+/
 insert into propiedad_vehiculo(id_propiedad,id_vehiculo,id_cliente,desde_en,motivo,registrado_por,id_predecesora,id_comando)
  values(1203,1003,204,systimestamp,'Transferencia concurrente',100,1103,9000);
 commit;
@@ -205,13 +224,14 @@ select 'EXECUTES='||count(*) from dba_tab_privs where grantee='$runtime' and own
 select 'DML='||count(*) from dba_tab_privs where grantee='$runtime' and owner='$schema' and privilege in ('INSERT','UPDATE','DELETE');
 "@
     Assert-Output 'runtime readiness reads' $grants 'SELECTS=3'
-    Assert-Output 'runtime facade executes' $grants 'EXECUTES=10'
+    Assert-Output 'runtime facade executes' $grants 'EXECUTES=9'
     Assert-Output 'runtime direct DML grants' $grants 'DML=0'
     Assert-Output 'runtime hash read denied' (Invoke-RuntimeSql "select sha256 from $schema.archivo_privado;" $false) 'ORA-00942|ORA-01031'
     Assert-Output 'runtime direct order DML denied' (Invoke-RuntimeSql "delete from $schema.orden_trabajo;" $false) 'ORA-00942|ORA-01031'
+    Assert-Output 'runtime internal T01 package denied' (Invoke-RuntimeSql "declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); r number; begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','direct',hextoraw('00'),100,null,'direct',1000,1100,200,1,'x','x','[]',o,e,v,c,p,ids,r); end;`n/" $false) 'PLS-00201|PLS-00904|ORA-06550'
 
     $oneEvidence = '[{"objectKey":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","mimeType":"image/png","sizeBytes":"123","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","intentId":"11111111-1111-4111-8111-111111111111","description":"Frente"}]'
-    $success = Invoke-RuntimeSql @"
+    $success = Invoke-OwnerSql @"
 declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); r number;
 begin
   $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','open-1',$hOpen,100,null,'corr-open-1',1000,1100,200,12345.6,'Revision general','Sin danos visibles',q'~$oneEvidence~',o,e,v,c,p,ids,r);
@@ -230,13 +250,13 @@ select 'FACTS='||(select count(*) from orden_trabajo where id_orden=$openedOrder
 "@
     Assert-Output 'atomic persisted facts' $oneFacts 'FACTS=1:1:1:1:1'
 
-    $retry = Invoke-RuntimeSql @"
+    $retry = Invoke-OwnerSql @"
 declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); r number;
 begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','open-1',$hOpen,100,null,'corr-open-1',1000,1100,200,12345.6,'Revision general','Sin danos visibles',q'~$oneEvidence~',o,e,v,c,p,ids,r); commit; dbms_output.put_line('RETRY='||o||':'||ids||':'||r); end;
 /
 "@
     Assert-Output 'idempotent retry' $retry "RETRY=${openedOrder}:\[\d+\]:1"
-    $conflict = Invoke-RuntimeSql @"
+    $conflict = Invoke-OwnerSql @"
 declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); r number;
 begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','open-1',$hDifferent,100,null,'corr-open-1',1000,1100,200,1,'Otro','Sin danos',q'~$oneEvidence~',o,e,v,c,p,ids,r); end;
 /
@@ -244,14 +264,14 @@ begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','open-1',$hDiffe
     Assert-Output 'idempotency conflict' $conflict 'ORA-20002.*CLAVE_REUTILIZADA'
 
     $multiEvidence = '[{"objectKey":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","mimeType":"image/png","sizeBytes":"124","sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","intentId":"22222222-2222-4222-8222-222222222222","description":"Costado"},{"objectKey":"cccccccccccccccccccccccccccccccc","mimeType":"image/jpeg","sizeBytes":"125","sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","intentId":"33333333-3333-4333-8333-333333333333","description":"Parte trasera"}]'
-    $multi = Invoke-RuntimeSql @"
+    $multi = Invoke-OwnerSql @"
 declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); r number;
 begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','multi',$hMulti,100,null,'corr-multi',1005,1105,200,10,'Recepcion multiple','Sin danos',q'~$multiEvidence~',o,e,v,c,p,ids,r); commit; dbms_output.put_line('MULTI='||o||':'||ids); end;
 /
 "@
     Assert-Output 'multiple evidence opening' $multi 'MULTI=\d+:\[\d+,\d+\]'
 
-    $replay = Invoke-RuntimeSql @"
+    $replay = Invoke-OwnerSql @"
 declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); r number;
 begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','replay',$hReplay,100,null,'corr-replay',1004,1104,200,11,'Replay','Sin danos',q'~$oneEvidence~',o,e,v,c,p,ids,r); end;
 /
@@ -263,11 +283,11 @@ begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','replay',$hRepla
         @('delivered debt guard',1001,1101,201,$hDebt,'debt','ORA-20031.*DEUDA_NO_VERIFICABLE'),
         @('delivered without repair debt guard',1002,1102,202,$hDebtNoRepair,'debt-no-repair','ORA-20031.*DEUDA_NO_VERIFICABLE'),
         @('changed property',1003,1103,203,$hProperty,'property','ORA-20021.*PROPIEDAD_CAMBIADA'),
-        @('existing active order',1008,1108,200,$hActive,'active','ORA-20030.*ORDEN_ACTIVA_EXISTENTE'),
+        @('existing active order',1008,1108,200,$hActive,'active','ORA-20030.*ORDEN_ACTIVA_EXISTENTE ordenId=5003'),
         @('inactive vehicle',1009,1109,200,$hActive,'inactive','ORA-20014.*VEHICULO_NO_DISPONIBLE')
     )) {
         $owner = $case[3]; $hash = $case[4]; $key = $case[5]
-        $out = Invoke-RuntimeSql @"
+        $out = Invoke-OwnerSql @"
 declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); r number;
 begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','$key',$hash,100,null,'corr-$key',$($case[1]),$($case[2]),$owner,1,'Prueba','Sin danos',q'~[{"objectKey":"dddddddddddddddddddddddddddddddd","mimeType":"image/png","sizeBytes":"1","sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","intentId":"44444444-4444-4444-8444-444444444444","description":"Prueba"}]~',o,e,v,c,p,ids,r); end;
 /
@@ -276,7 +296,7 @@ begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','$key',$hash,100
     }
 
     foreach ($actorCase in @(@(101,$hRole,'admin-only'),@(102,$hRole,'inactive-actor'),@(103,$hRole,'client-actor'))) {
-        $out = Invoke-RuntimeSql @"
+        $out = Invoke-OwnerSql @"
 declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); r number;
 begin $schema.pkg_ordenes.abrir_orden_comercial('actor:$($actorCase[0])/T01','$($actorCase[2])',$($actorCase[1]),$($actorCase[0]),null,'corr-role',1006,1106,200,1,'Prueba rol','Sin danos',q'~[{"objectKey":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","mimeType":"image/png","sizeBytes":"1","sha256":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","intentId":"55555555-5555-4555-8555-555555555555","description":"Prueba"}]~',o,e,v,c,p,ids,r); end;
 /
@@ -285,7 +305,7 @@ begin $schema.pkg_ordenes.abrir_orden_comercial('actor:$($actorCase[0])/T01','$(
     }
 
     $duplicateEvidence = '[{"objectKey":"ffffffffffffffffffffffffffffffff","mimeType":"image/png","sizeBytes":"1","sha256":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","intentId":"66666666-6666-4666-8666-666666666666","description":"Primera"},{"objectKey":"ffffffffffffffffffffffffffffffff","mimeType":"image/png","sizeBytes":"1","sha256":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","intentId":"66666666-6666-4666-8666-666666666666","description":"Segunda"}]'
-    $partial = Invoke-RuntimeSql @"
+    $partial = Invoke-OwnerSql @"
 declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); r number;
 begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','partial',$hPartial,100,null,'corr-partial',1006,1106,200,1,'Fallo intermedio','Sin danos',q'~$duplicateEvidence~',o,e,v,c,p,ids,r); end;
 /
@@ -294,7 +314,7 @@ begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','partial',$hPart
     Assert-Output 'no partial commit' (Invoke-OwnerSql "select 'PARTIAL='||(select count(*) from orden_trabajo where id_vehiculo=1006)||':'||(select count(*) from archivo_privado where clave_objeto='ffffffffffffffffffffffffffffffff')||':'||(select count(*) from comando where clave_idempotencia='partial') from dual;") 'PARTIAL=0:0:0'
 
     Invoke-OwnerSql "alter table orden_trabajo add constraint ck_t01_force_order check (id_orden < 0) enable novalidate;" | Out-Null
-    $orderFailure = Invoke-RuntimeSql @"
+    $orderFailure = Invoke-OwnerSql @"
 declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); r number;
 begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','order-failure',$(Get-TestRawSql 'order-failure'),100,null,'corr-order',1006,1106,200,1,'Fallo orden','Sin danos',q'~[{"objectKey":"15151515151515151515151515151515","mimeType":"image/png","sizeBytes":"1","sha256":"1515151515151515151515151515151515151515151515151515151515151515","intentId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","description":"Orden"}]~',o,e,v,c,p,ids,r); end;
 /
@@ -304,7 +324,7 @@ begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','order-failure',
     Assert-Output 'order failure rollback' (Invoke-OwnerSql "select 'ORDER_ROLLBACK='||(select count(*) from orden_trabajo where id_vehiculo=1006)||':'||(select count(*) from comando where clave_idempotencia='order-failure') from dual;") 'ORDER_ROLLBACK=0:0'
 
     Invoke-OwnerSql "alter table orden_evento add constraint ck_t01_force_event check (id_evento_orden < 0) enable novalidate;" | Out-Null
-    $eventFailure = Invoke-RuntimeSql @"
+    $eventFailure = Invoke-OwnerSql @"
 declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); r number;
 begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','event-failure',$(Get-TestRawSql 'event-failure'),100,null,'corr-event',1006,1106,200,1,'Fallo evento','Sin danos',q'~[{"objectKey":"13131313131313131313131313131313","mimeType":"image/png","sizeBytes":"1","sha256":"1313131313131313131313131313131313131313131313131313131313131313","intentId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","description":"Evento"}]~',o,e,v,c,p,ids,r); end;
 /
@@ -313,7 +333,7 @@ begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','event-failure',
     Invoke-OwnerSql 'alter table orden_evento drop constraint ck_t01_force_event;' | Out-Null
     Assert-Output 'event failure rollback' (Invoke-OwnerSql "select 'EVENT_ROLLBACK='||(select count(*) from orden_trabajo where id_vehiculo=1006)||':'||(select count(*) from comando where clave_idempotencia='event-failure') from dual;") 'EVENT_ROLLBACK=0:0'
 
-    $auditFailure = Invoke-RuntimeSql @"
+    $auditFailure = Invoke-OwnerSql @"
 declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); r number;
 begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','audit-failure',$(Get-TestRawSql 'audit-failure'),100,null,rpad('x',101,'x'),1007,1107,200,1,'Fallo auditoria','Sin danos',q'~[{"objectKey":"14141414141414141414141414141414","mimeType":"image/png","sizeBytes":"1","sha256":"1414141414141414141414141414141414141414141414141414141414141414","intentId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","description":"Auditoria"}]~',o,e,v,c,p,ids,r); end;
 /
@@ -354,6 +374,78 @@ begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','file-b',$hFileR
     Assert-Output 'object-consumption race winner' ($fileRace -join "`n") 'FILE_A=COMMIT'
     Assert-Output 'object-consumption race loser' ($fileRace -join "`n") 'FILE_B=-20047'
 
+
+    # Hardened HTTP facade (the only runtime entry): live session with current credential
+    # version and RECEPCIONISTA now; appointment attended atomically; read-only replay lookup.
+    function Invoke-Facade([string]$Key, [string]$Hash, [string]$Actor, [string]$Session, [string]$Correlation, [string]$Vehicle, [string]$Property, [string]$Owner, [string]$Cita, [string]$CitaVersion, [string]$Evidence, [bool]$ShouldSucceed = $true) {
+        return Invoke-RuntimeSql @"
+declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); ct number; r number; cmd number; conf varchar2(40);
+begin
+  $schema.pkg_recepcion_http.abrir_orden_comercial('actor:$Actor/T01','$Key',$Hash,$Actor,$Session,'$Correlation',$Vehicle,$Property,$Owner,10,'Recepcion fachada','Sin danos visibles',q'~$Evidence~',$Cita,$CitaVersion,o,e,v,c,p,ids,ct,r,cmd,conf);
+  commit; dbms_output.put_line('FACADE='||o||':'||e||':'||c||':'||p||':'||nvl(to_char(ct),'null')||':'||r||':'||cmd||':'||conf);
+end;
+/
+"@ $ShouldSucceed
+    }
+    function New-Evidence([string]$Hex, [string]$Intent) {
+        return '[{"objectKey":"' + ($Hex * 16) + '","mimeType":"image/png","sizeBytes":"1","sha256":"' + ($Hex * 32) + '","intentId":"' + $Intent + '","description":"Fachada"}]'
+    }
+    $hCita = Get-TestRawSql 't01-cita'
+    Assert-Output 'facade null session' (Invoke-Facade 'null-session' $hCita '100' 'null' 'n' '1014' '1114' '200' 'null' 'null' (New-Evidence 'a1' 'a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1') $false) 'ORA-20010.*ACTOR_O_SESION_INVALIDO'
+    Assert-Output 'facade stale credential version' (Invoke-Facade 'stale-credential' $hCita '100' '7001' 'n' '1014' '1114' '200' 'null' 'null' (New-Evidence 'a1' 'a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1') $false) 'ORA-20010.*ACTOR_O_SESION_INVALIDO'
+    Assert-Output 'facade administrator without receptionist' (Invoke-Facade 'admin-session' $hCita '101' '7002' 'n' '1014' '1114' '200' 'null' 'null' (New-Evidence 'a1' 'a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1') $false) 'ORA-20011.*ROL_RECEPCIONISTA_REQUERIDO'
+    foreach ($citaCase in @(
+        @('appointment id without version','cita-no-version','1018','1118','8005','null','ORA-20032.*RECEPCION_INVALIDA'),
+        @('appointment version without id','version-no-cita','1018','1118','null','2','ORA-20032.*RECEPCION_INVALIDA'),
+        @('appointment of another vehicle','cita-other-vehicle','1018','1118','8002','2','ORA-20033.*VALIDACION_DOMINIO /citaId'),
+        @('missing appointment','cita-missing','1018','1118','8999','1','ORA-20033.*VALIDACION_DOMINIO /citaId'),
+        @('stale appointment version','cita-stale','1015','1115','8002','1','ORA-20036.*VERSION_DESACTUALIZADA'),
+        @('already attended appointment','cita-attended','1016','1116','8003','3','ORA-20034.*CITA_YA_VINCULADA'),
+        @('requested appointment','cita-requested','1017','1117','8004','1','ORA-20035.*ESTADO_INCOMPATIBLE')
+    )) {
+        $out = Invoke-Facade $citaCase[1] (Get-TestRawSql $citaCase[1]) '100' '7000' 'cita' $citaCase[2] $citaCase[3] '200' $citaCase[4] $citaCase[5] (New-Evidence 'a2' 'a2a2a2a2-a2a2-4a2a-8a2a-a2a2a2a2a2a2') $false
+        Assert-Output $citaCase[0] $out $citaCase[6]
+    }
+    Assert-Output 'appointment rejections leave no facts' (Invoke-OwnerSql "select 'CITA_REJECT='||(select count(*) from orden_trabajo where id_vehiculo in (1015,1016,1017,1018))||':'||(select count(*) from cita where id_cita=8002 and estado='CONFIRMADA' and version_fila=2)||':'||(select count(*) from cita_evento)||':'||(select count(*) from comando where clave_idempotencia like 'cita-%' or clave_idempotencia like 'version-%') from dual;") 'CITA_REJECT=0:1:0:0'
+
+    $citaRollback = Invoke-RuntimeSql @"
+declare o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); ct number; r number; cmd number; conf varchar2(40);
+begin $schema.pkg_recepcion_http.abrir_orden_comercial('actor:100/T01','cita-rollback',$(Get-TestRawSql 'cita-rollback'),100,7000,rpad('x',101,'x'),1018,1118,200,1,'Fallo auditoria con cita','Sin danos',q'~$(New-Evidence 'a3' 'a3a3a3a3-a3a3-4a3a-8a3a-a3a3a3a3a3a3')~',8005,2,o,e,v,c,p,ids,ct,r,cmd,conf); end;
+/
+"@ $false
+    Assert-Output 'appointment opening audit failure' $citaRollback 'ORA-12899'
+    Assert-Output 'appointment rollback' (Invoke-OwnerSql "select 'CITA_ROLLBACK='||(select count(*) from orden_trabajo where id_vehiculo=1018)||':'||(select count(*) from cita where id_cita=8005 and estado='CONFIRMADA' and version_fila=2)||':'||(select count(*) from cita_evento where id_cita=8005)||':'||(select count(*) from archivo_privado where clave_objeto=rpad('a3',32,'a3'))||':'||(select count(*) from comando where clave_idempotencia='cita-rollback') from dual;") 'CITA_ROLLBACK=0:1:0:0:0'
+
+    $citaEvidence = New-Evidence 'a4' 'a4a4a4a4-a4a4-4a4a-8a4a-a4a4a4a4a4a4'
+    $citaOpen = Invoke-Facade 'cita-open' $hCita '100' '7000' 'cita-open' '1014' '1114' '200' '8001' '2' $citaEvidence
+    Assert-Output 'appointment opening' $citaOpen 'FACADE=\d+:RECIBIDO:200:1114:8001:0:\d+:\d{4}-\d\d-\d\dT'
+    $citaOrder = [long]([regex]::Match($citaOpen, 'FACADE=(\d+)').Groups[1].Value)
+    Assert-Output 'appointment attended with order' (Invoke-OwnerSql @"
+select 'CITA_FACTS='||(select count(*) from orden_trabajo where id_orden=$citaOrder and id_cita=8001)
+ ||':'||(select count(*) from cita where id_cita=8001 and estado='ATENDIDA' and version_fila=3)
+ ||':'||(select count(*) from cita_evento ce join orden_trabajo o on o.id_comando=ce.id_comando where ce.id_cita=8001 and ce.tipo='ESTADO' and ce.estado_anterior='CONFIRMADA' and ce.estado_nuevo='ATENDIDA' and o.id_orden=$citaOrder)
+ ||':'||(select count(*) from comando where clave_idempotencia='cita-open' and id_sesion=7000 and json_value(resultado_minimo,'$.citaId')='8001')
+ ||':'||(select count(*) from auditoria_evento where identificador_recurso=to_char($citaOrder) and json_value(cambios,'$.citaId')='8001') from dual;
+"@) 'CITA_FACTS=1:1:1:1:1'
+    $citaReplay = Invoke-Facade 'cita-open' $hCita '100' '7000' 'cita-open' '1014' '1114' '200' '8001' '2' $citaEvidence
+    Assert-Output 'appointment replay keeps the same order and appointment' $citaReplay "FACADE=${citaOrder}:RECIBIDO:200:1114:8001:1:"
+    Assert-Output 'replay with another session is not this intention' (Invoke-Facade 'cita-open' $hCita '100' '7001' 'cita-open' '1014' '1114' '200' '8001' '2' $citaEvidence $false) 'ORA-20010'
+
+    function Invoke-Lookup([string]$Key, [string]$Hash, [bool]$ShouldSucceed = $true) {
+        return Invoke-RuntimeSql @"
+declare f number; o number; e varchar2(40); v number; c number; p number; ids varchar2(4000); ct number; cmd number; conf varchar2(40);
+begin $schema.pkg_recepcion_http.consultar_apertura_confirmada('actor:100/T01','$Key',$Hash,100,7000,f,o,e,v,c,p,ids,ct,cmd,conf); rollback; dbms_output.put_line('LOOKUP='||f||':'||o||':'||e||':'||nvl(to_char(ct),'null')||':'||ids); end;
+/
+"@ $ShouldSucceed
+    }
+    Assert-Output 'lookup resolves a confirmed intention' (Invoke-Lookup 'cita-open' $hCita) "LOOKUP=1:${citaOrder}:RECIBIDO:8001:\[\d+\]"
+    Assert-Output 'lookup without command opens nothing' (Invoke-Lookup 'never-sent' $hCita) 'LOOKUP=0:::null:'
+    Assert-Output 'lookup with different content' (Invoke-Lookup 'cita-open' (Get-TestRawSql 'other-content') $false) 'ORA-20002.*CLAVE_REUTILIZADA'
+    Invoke-OwnerSql "insert into comando(ambito,clave_idempotencia,solicitud_hash,tipo_operacion,id_actor,id_sesion,registrado_en,resultado_codigo) values('actor:100/T01','pending',$hCita,'ABRIR_ORDEN_COMERCIAL',100,7000,systimestamp,102);`ncommit;" | Out-Null
+    Assert-Output 'lookup of an unconfirmed command' (Invoke-Lookup 'pending' $hCita $false) 'ORA-20003.*RESULTADO_NO_CONFIRMADO'
+    Assert-Output 'facade retry of an unconfirmed command' (Invoke-Facade 'pending' $hCita '100' '7000' 'pending' '1018' '1118' '200' 'null' 'null' (New-Evidence 'a5' 'a5a5a5a5-a5a5-4a5a-8a5a-a5a5a5a5a5a5') $false) 'ORA-20003.*RESULTADO_NO_CONFIRMADO'
+    Invoke-OwnerSql "delete from comando where clave_idempotencia='pending' and resultado_codigo=102;`ncommit;" | Out-Null
+
     $env:TT_RUN_T01_ORACLE_INTEGRATION = '1'
     $env:TT_ORACLE_USER = $runtime
     $env:TT_ORACLE_PASSWORD = $runtimePassword
@@ -363,6 +455,7 @@ begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','file-b',$hFileR
     $env:TT_T01_VEHICLE_ID = '1013'
     $env:TT_T01_PROPERTY_ID = '1113'
     $env:TT_T01_OWNER_ID = '200'
+    $env:TT_T01_SESSION_ID = '7000'
     $oldPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
@@ -382,16 +475,19 @@ select 'NODE_T01='||(select count(*) from orden_trabajo where id_vehiculo=1013 a
 select 'INVARIANTS='||(select count(*) from orden_trabajo o where not exists(select 1 from evidencia e where e.id_orden=o.id_orden) and o.id_comando<>9000)
  ||':'||(select count(*) from (select clave_objeto from archivo_privado group by clave_objeto having count(*)>1))
  ||':'||(select count(*) from (select id_vehiculo from orden_trabajo where estado in ('RECIBIDO','EN_DIAGNOSTICO','ESPERANDO_AUTORIZACION','EN_REPARACION','LISTO_PARA_ENTREGA','PENDIENTE_ENTREGA_SIN_REPARACION') group by id_vehiculo having count(*)>1))
- ||':'||(select count(*) from comando c where c.tipo_operacion='ABRIR_ORDEN_COMERCIAL' and (c.resultado_codigo<>201 or c.resultado_minimo is null)) from dual;
+ ||':'||(select count(*) from comando c where c.tipo_operacion='ABRIR_ORDEN_COMERCIAL' and (c.resultado_codigo<>201 or c.resultado_minimo is null))
+ ||':'||(select count(*) from cita ci where ci.estado='ATENDIDA' and ci.id_cita<>8003 and not exists(select 1 from orden_trabajo o where o.id_cita=ci.id_cita)) from dual;
 "@
-    Assert-Output 'final invariants' $finalEvidence 'INVARIANTS=0:0:0:0'
+    Assert-Output 'final invariants' $finalEvidence 'INVARIANTS=0:0:0:0:0'
 
-    Write-Output 'PASS T01 migration: V013 upgrade, second migrate, Flyway validate, and valid PKG_ORDENES body.'
+    Write-Output 'PASS T01 migration: V013 upgrade through V022, second migrate, Flyway validate, and valid PKG_ORDENES/PKG_RECEPCION_HTTP bodies.'
     Write-Output 'PASS T01 operation: direct COMERCIAL opening persists order, APERTURA event, 1..N reception evidence, command, and audit atomically; real Node/filesystem/Oracle orchestration passed.'
     Write-Output 'PASS T01 guards: exact receptionist role, active actor/vehicle, current expected ownership, active-order exclusion, and conservative delivered-order debt guard.'
     Write-Output 'PASS T01 idempotency/replay: same command returns its order; incompatible key and object reuse fail; intermediate evidence failure leaves no partial facts.'
     Write-Output 'PASS T01 concurrency: independent sessions leave exactly one active order per vehicle and exactly one confirmed consumer per object key.'
-    Write-Output 'PASS T01 least privilege: three readiness SELECTs, ten bounded runtime facade EXECUTEs, no direct DML, and no arbitrary file/hash reads.'
+    Write-Output 'PASS T01 appointment: CONFIRMADA appointment of the same vehicle at the expected version becomes ATENDIDA with the order; id/version pairing, foreign vehicle, stale version, attended and requested appointments are rejected; failure leaves it CONFIRMADA.'
+    Write-Output 'PASS T01 facade: null session, stale credential version and administrator-only actor are rejected; replay needs the same session; read-only lookup resolves confirmed, absent, reused and unconfirmed intentions.'
+    Write-Output 'PASS T01 least privilege: three readiness SELECTs, nine bounded runtime facade EXECUTEs (no internal PKG_ORDENES), no direct DML, and no arbitrary file/hash reads.'
     Write-Output "T01_EVIDENCE $($finalEvidence -replace '\s+',' ')"
 }
 finally {

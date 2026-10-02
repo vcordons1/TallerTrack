@@ -83,7 +83,23 @@ function parseReceptionBody(source) {
     "vehiculoId", "propiedadEsperadaId", "propietarioEsperadoId", "kilometrajeIngreso",
     "motivoIngreso", "danosVisibles", "evidenciasRecepcion",
   ];
-  if (!exactProperties(body, fields)) reject("SOLICITUD_INVALIDA", "The request has missing or unknown fields");
+  // The optional appointment travels as a pair (API contract O02). excepcionId,
+  // ingresadoEn and motivoRegistroTardio stay rejected until their rules exist.
+  const appointment = ["citaId", "citaVersionEsperada"];
+  const present = appointment.filter((key) => body !== null && typeof body === "object" && Object.hasOwn(body, key));
+  if (present.length === 1) {
+    const error = new ReceptionHttpError("SOLICITUD_INVALIDA", "citaId and citaVersionEsperada travel together");
+    error.fields = appointment.filter((key) => !present.includes(key))
+      .map((key) => ({ path: `/${key}`, code: "SOLICITUD_INVALIDA", message: "citaId y citaVersionEsperada van juntos." }));
+    throw error;
+  }
+  if (!exactProperties(body, [...fields, ...present])) reject("SOLICITUD_INVALIDA", "The request has missing or unknown fields");
+  if (present.length === 2) {
+    positiveId(body.citaId, "citaId");
+    if (typeof body.citaVersionEsperada !== "string" || !/^[1-9][0-9]{0,9}$/.test(body.citaVersionEsperada)) {
+      reject("SOLICITUD_INVALIDA", "citaVersionEsperada is invalid");
+    }
+  }
   if (!Array.isArray(body.evidenciasRecepcion)) reject("SOLICITUD_INVALIDA", "evidenciasRecepcion is invalid");
   if (body.evidenciasRecepcion.some((item) => !exactProperties(item, ["recibo", "descripcion"]))) {
     reject("SOLICITUD_INVALIDA", "A reception evidence item has missing or unknown fields");
@@ -277,6 +293,8 @@ export function createReceptionHttp({
         mileageEntry: body.kilometrajeIngreso,
         entryReason: body.motivoIngreso,
         visibleDamage: body.danosVisibles,
+        appointmentId: body.citaId ?? null,
+        appointmentExpectedVersion: body.citaVersionEsperada ?? null,
         receptionEvidence: body.evidenciasRecepcion.map((item) => ({
           receipt: item?.recibo,
           description: item?.descripcion,
@@ -288,7 +306,7 @@ export function createReceptionHttp({
         estado: result.state,
         clienteContractualId: String(result.contractualClientId),
         propiedadAperturaId: String(result.openingPropertyId),
-        citaId: null,
+        citaId: result.appointmentId == null ? null : String(result.appointmentId),
         evidenciasIds: result.evidenceIds.map(String),
         excepcionConsumidaId: null,
       };

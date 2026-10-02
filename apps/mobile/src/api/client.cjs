@@ -1,10 +1,10 @@
 const ACCESS_FAILURES = new Set(["ACCESO_EXPIRADO", "SESION_INVALIDA"]);
 
 class ApiError extends Error {
-  constructor(message, { status = 0, code = null, requestId = null, recovery = null, uncertain = false, fields = [] } = {}) {
+  constructor(message, { status = 0, code = null, requestId = null, recovery = null, uncertain = false, fields = [], details = {} } = {}) {
     super(message);
     this.name = "ApiError";
-    Object.assign(this, { status, code, requestId, recovery, uncertain, fields });
+    Object.assign(this, { status, code, requestId, recovery, uncertain, fields, details });
   }
 }
 
@@ -54,6 +54,7 @@ function createApiClient({ baseUrl, fetchImpl, store, onSessionLost = () => {}, 
           requestId: error?.requestId || response.headers?.get?.("X-Request-ID"),
           recovery: error?.recuperacion,
           fields: Array.isArray(error?.fields) ? error.fields : [],
+          details: error?.details && typeof error.details === "object" && !Array.isArray(error.details) ? error.details : {},
           uncertain: uncertainBusinessResult && (error?.resultado === "DESCONOCIDO"
             || error?.recuperacion === "REINTENTAR_MISMA_CLAVE"
             || (response.status >= 500 && error?.resultado !== "NO_CONFIRMADO")),

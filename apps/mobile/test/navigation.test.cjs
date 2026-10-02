@@ -83,6 +83,9 @@ test("only an explicit receptionist role can create reception", () => {
   assert.equal(hasInternalCapability([ROLES.RECEPCIONISTA], CAPABILITIES.RECEPTION_CREATE), true);
   assert.equal(hasInternalCapability([ROLES.ADMINISTRADOR, ROLES.RECEPCIONISTA], CAPABILITIES.RECEPTION_CREATE), true);
   assert.equal(hasInternalCapability([ROLES.ADMINISTRADOR], CAPABILITIES.RECEPTION_CREATE), false);
+  assert.equal(hasInternalCapability([ROLES.MECANICO], CAPABILITIES.RECEPTION_CREATE), false);
+  assert.equal(hasInternalCapability([ROLES.INVENTARIO], CAPABILITIES.RECEPTION_CREATE), false);
+  assert.equal(hasInternalCapability([ROLES.CLIENTE], CAPABILITIES.RECEPTION_CREATE), false);
 });
 
 test("authenticated actor type selects a separate shell", () => {

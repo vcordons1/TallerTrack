@@ -123,7 +123,15 @@ test("expiration uses an injected clock and has no sleep-based boundary", () => 
   current = payload.expiresAt - 1;
   assert.deepEqual(verify(receipt, instance), payload);
   current = payload.expiresAt + 1;
-  assert.throws(() => verify(receipt, instance), { code: "UPLOAD_RECEIPT_EXPIRED" });
+  assert.throws(() => verify(receipt, instance), (error) => {
+    // Authenticated facts travel only for resolving an already confirmed K command and
+    // are never serialized with the error.
+    assert.equal(error.code, "UPLOAD_RECEIPT_EXPIRED");
+    assert.deepEqual(error.authenticatedPayload, payload);
+    assert.equal(Object.keys(error).includes("authenticatedPayload"), false);
+    assert.equal(JSON.stringify(error).includes(payload.objectKey), false);
+    return true;
+  });
 });
 
 test("expected actor and each expected context coordinate must match", () => {

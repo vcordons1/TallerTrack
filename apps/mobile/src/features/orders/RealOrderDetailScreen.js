@@ -40,7 +40,9 @@ export function RealOrderDetailScreen() {
   const { access } = useSession();
   const reception = access.roles.includes("RECEPCIONISTA");
   const mechanic = access.roles.includes("MECANICO");
-  const view = reception ? "RECEPCION" : "TECNICA";
+  // ADMINISTRADOR consults the reception projection (O03 A/R) without operational actions.
+  const supervisor = !reception && !mechanic;
+  const view = reception || supervisor ? "RECEPCION" : "TECNICA";
   const [state, setState] = useState({ status: "loading" });
   const [retry, setRetry] = useState(0);
   const [selectedMechanic, setSelectedMechanic] = useState(null);
@@ -55,9 +57,9 @@ export function RealOrderDetailScreen() {
     setState({ status: "loading" });
     Promise.all([
       realOrderRepository.loadDetail(id, view),
-      allPages((cursor) => realOrderRepository.loadParticipants(id, cursor)),
-      allPages((cursor) => realOrderRepository.loadWorks(id, cursor)),
-      allPages((cursor) => realOrderRepository.loadDiagnoses(id, cursor)),
+      supervisor ? [] : allPages((cursor) => realOrderRepository.loadParticipants(id, cursor)),
+      supervisor ? [] : allPages((cursor) => realOrderRepository.loadWorks(id, cursor)),
+      supervisor ? [] : allPages((cursor) => realOrderRepository.loadDiagnoses(id, cursor)),
       reception ? allPages((cursor) => realOrderRepository.loadEligibleMechanics(id, cursor)) : [],
     ]).then(([order, participants, works, diagnoses, eligible]) => {
       if (active) setState({ status: "ready", order, participants, works, diagnoses, eligible });
@@ -67,7 +69,7 @@ export function RealOrderDetailScreen() {
         : "No se pudo consultar la orden. Comprueba la conexión." });
     });
     return () => { active = false; };
-  }, [id, view, reception, retry]);
+  }, [id, view, reception, supervisor, retry]);
 
   async function perform(kind, run) {
     if (send.status === "sending") return;

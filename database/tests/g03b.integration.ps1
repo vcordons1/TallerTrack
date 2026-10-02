@@ -110,7 +110,7 @@ try {
 select 'CLEAN_MIGRATIONS='||count(*) from $cleanSchema."flyway_schema_history" where "success"=1;
 select 'CLEAN_TABLES='||count(*) from all_tables where owner='$cleanSchema' and table_name in ('ARCHIVO_PRIVADO','EVIDENCIA');
 "@
-    Assert-Output 'clean V001-V021 migration count' $cleanEvidence 'CLEAN_MIGRATIONS=21'
+    Assert-Output 'clean V001-V022 migration count' $cleanEvidence 'CLEAN_MIGRATIONS=22'
     Assert-Output 'clean G03B tables' $cleanEvidence 'CLEAN_TABLES=2'
 
     & $ownerBootstrap -SchemaName $schema -OwnerPassword (ConvertTo-TestSecureString $ownerPassword) | Out-Null
@@ -124,7 +124,7 @@ select 'CLEAN_TABLES='||count(*) from all_tables where owner='$cleanSchema' and 
     $second = Invoke-Flyway 'migrate'
     $validate = Invoke-Flyway 'validate'
     Assert-Output 'second migrate no-op' $second 'Schema .* is up to date|No migration necessary'
-    Assert-Output 'Flyway validation' $validate 'Successfully validated 21 migrations'
+    Assert-Output 'Flyway validation' $validate 'Successfully validated 22 migrations'
 
     $structure = Invoke-SysSql @"
 alter session set current_schema=$schema;
@@ -207,7 +207,7 @@ commit;
     $privileges = Invoke-SysSql "select 'G03B_DML='||count(*) from dba_tab_privs where grantee='$runtime' and owner='$schema' and table_name in ('ARCHIVO_PRIVADO','EVIDENCIA') and privilege in ('SELECT','INSERT','UPDATE','DELETE');"
     Assert-Output 'G03B least privilege' $privileges 'G03B_DML=0'
 
-    Write-Output 'PASS G03B migrations: clean V001->V021, upgrade V011->V021, second migrate no-op, and Flyway validate green.'
+    Write-Output 'PASS G03B migrations: clean V001->V022, upgrade V011->V022, second migrate no-op, and Flyway validate green.'
     Write-Output 'PASS G03B structure: canonical types/nullability, available FKs, checks, unique object/replacement keys, and four explicitly deferred future FKs.'
     Write-Output 'PASS G03B integrity: invalid size, actors, orders, contexts, visibility, reception privacy, duplicates, and direct runtime DML were rejected.'
 }

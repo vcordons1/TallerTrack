@@ -101,8 +101,19 @@ export function requestContext(request, response, next) {
 
 const CONFLICTS = new Set([
   "CLAVE_REUTILIZADA", "ORDEN_ACTIVA_EXISTENTE", "PROPIEDAD_CAMBIADA", "OBJETO_YA_CONSUMIDO",
-  "REFERENCIA_DUPLICADA", "ESTADO_INCOMPATIBLE", "VERSION_DESACTUALIZADA",
+  "REFERENCIA_DUPLICADA", "ESTADO_INCOMPATIBLE", "VERSION_DESACTUALIZADA", "CITA_YA_VINCULADA",
 ]);
+const ID_DETAIL = /^[1-9][0-9]{0,17}$/;
+
+// details is a closed list per error (API contract 2.7). Only the consultable id of the
+// conflicting active order is currently allowed.
+function allowedDetails(code, error) {
+  const ordenId = error?.details?.ordenId;
+  if (code === "ORDEN_ACTIVA_EXISTENTE" && typeof ordenId === "string" && ID_DETAIL.test(ordenId)) {
+    return { ordenId };
+  }
+  return {};
+}
 const DOMAIN_FAILURES = new Set([
   "DEUDA_NO_VERIFICABLE", "CLIENTE_NO_DISPONIBLE", "VEHICULO_NO_ENCONTRADO",
   "VEHICULO_NO_DISPONIBLE", "EVIDENCIA_REQUERIDA", "EVIDENCIA_NO_APLICABLE", "EVIDENCIA_INVALIDA",
@@ -225,7 +236,7 @@ export function apiErrorHandler(error, request, response, _next, logger = consol
     recuperacion: recovery,
     // Only validated input paths (never values) are echoed; see API contract §2.7.
     fields: status < 500 && Array.isArray(error?.fields) ? error.fields : [],
-    details: {},
+    details: allowedDetails(code, error),
   };
   if (request.method !== "GET") body.resultado = status >= 500 ? "DESCONOCIDO" : "NO_CONFIRMADO";
   if (status >= 500) {

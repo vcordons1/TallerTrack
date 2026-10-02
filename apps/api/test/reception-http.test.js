@@ -59,9 +59,15 @@ async function harness(t, { maxFileBytes = 1024 * 1024, uploadMaximumRequests = 
     },
     async openCommercialOrder(command) {
       opened.push(command);
+      if (command.vehicleId === "1008") {
+        throw Object.assign(new Error("active"), { code: "ORDEN_ACTIVA_EXISTENTE", details: { ordenId: "5003", extra: "x" } });
+      }
+      if (command.vehicleId === "1009") {
+        throw Object.assign(new Error("stale"), { code: "PROPIEDAD_CAMBIADA", details: { ordenId: "5003" } });
+      }
       return {
         orderId: "700", state: "RECIBIDO", version: 1,
-        contractualClientId: "200", openingPropertyId: "1100",
+        contractualClientId: "200", openingPropertyId: "1100", appointmentId: command.appointmentId,
         evidenceIds: [800], repeated: false, commandId: "900",
         confirmedAt: "2026-09-12T10:00:00.000000Z",
       };
@@ -256,4 +262,59 @@ test("O02 derives actor/session, enforces strict JSON and exposes canonical comm
   });
   assert.equal(injected.status, 400);
   assert.equal(opened.length, 2);
+});
+
+test("O02 accepts the appointment only as a pair and keeps undefined rules closed", async (t) => {
+  const { baseUrl, opened } = await harness(t);
+  const body = {
+    vehiculoId: "1000", propiedadEsperadaId: "1100", propietarioEsperadoId: "200",
+    kilometrajeIngreso: "10", motivoIngreso: "Servicio", danosVisibles: "Sin daños visibles",
+    evidenciasRecepcion: [{ recibo: "opaque", descripcion: "Vista frontal" }],
+  };
+  const post = (payload) => fetch(`${baseUrl}/interno/ordenes/abrir`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${receptionistToken}`, "Content-Type": "application/json", "Idempotency-Key": idempotency },
+    body: JSON.stringify(payload),
+  });
+  const attended = await post({ ...body, citaId: "8001", citaVersionEsperada: "2" });
+  assert.equal(attended.status, 201);
+  assert.equal((await attended.json()).data.citaId, "8001");
+  assert.deepEqual(
+    { appointmentId: opened[0].appointmentId, appointmentExpectedVersion: opened[0].appointmentExpectedVersion },
+    { appointmentId: "8001", appointmentExpectedVersion: "2" },
+  );
+
+  const onlyId = await post({ ...body, citaId: "8001" });
+  assert.equal(onlyId.status, 400);
+  assert.deepEqual((await onlyId.json()).error.fields.map(({ path }) => path), ["/citaVersionEsperada"]);
+  const onlyVersion = await post({ ...body, citaVersionEsperada: "2" });
+  assert.equal(onlyVersion.status, 400);
+  assert.equal((await post({ ...body, citaId: "8001", citaVersionEsperada: 2 })).status, 400);
+  for (const closed of [{ excepcionId: "1" }, { ingresadoEn: "2026-10-01T10:00:00Z" }, { motivoRegistroTardio: "Tarde" }]) {
+    assert.equal((await post({ ...body, ...closed })).status, 400);
+  }
+  assert.equal(opened.length, 1);
+});
+
+test("O02 conflict details are a closed list: only the consultable active order id", async (t) => {
+  const { baseUrl } = await harness(t);
+  const body = {
+    propiedadEsperadaId: "1100", propietarioEsperadoId: "200",
+    kilometrajeIngreso: "10", motivoIngreso: "Servicio", danosVisibles: "Sin daños visibles",
+    evidenciasRecepcion: [{ recibo: "opaque", descripcion: "Vista frontal" }],
+  };
+  const post = (vehiculoId) => fetch(`${baseUrl}/interno/ordenes/abrir`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${receptionistToken}`, "Content-Type": "application/json", "Idempotency-Key": idempotency },
+    body: JSON.stringify({ ...body, vehiculoId }),
+  });
+  const active = await post("1008");
+  assert.equal(active.status, 409);
+  const activeBody = (await active.json()).error;
+  assert.equal(activeBody.code, "ORDEN_ACTIVA_EXISTENTE");
+  assert.deepEqual(activeBody.details, { ordenId: "5003" });
+  assert.equal(activeBody.resultado, "NO_CONFIRMADO");
+  const changed = await post("1009");
+  assert.equal(changed.status, 409);
+  assert.deepEqual((await changed.json()).error.details, {});
 });

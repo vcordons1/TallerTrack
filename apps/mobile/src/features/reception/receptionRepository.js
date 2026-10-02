@@ -22,7 +22,7 @@ export const receptionRepository = Object.freeze({
   async upload(photo, context) {
     return (await api.request("/interno/evidencias/cargar", {
       method: "POST", body: createUploadForm(photo, context, File),
-    })).data.recibo;
+    })).data;
   },
   async open(body, key) {
     return (await api.request("/interno/ordenes/abrir", {

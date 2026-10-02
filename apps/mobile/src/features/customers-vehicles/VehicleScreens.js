@@ -8,7 +8,9 @@ import { Button, Choices, Field, KeyValue, Loading, Notice, OwnerPicker, QR_STAT
   describeInstant, errorMessage, styles, useCommandIntent, useVehicleTypes } from "./CustomerVehicleComponents";
 import { customerVehicleRepository as repository } from "./customerVehicleRepository";
 import { usePagedList } from "./CustomerScreens";
+import { useSession } from "../../session/SessionProvider";
 
+const { CAPABILITIES, hasInternalCapability } = require("../../navigation/accessPolicy");
 const { validateVehicleForm, vehicleRegistrationBody, vehicleChanges, vehicleToForm, transferBody,
   serverFieldErrors } = require("./customerVehicleForms.cjs");
 
@@ -151,6 +153,8 @@ function PropertyHistory({ vehicleId }) {
 
 export function VehicleDetailScreen() {
   const { id } = useLocalSearchParams();
+  const { access } = useSession();
+  const canReceive = hasInternalCapability(access?.roles ?? [], CAPABILITIES.RECEPTION_CREATE);
   const types = useVehicleTypes();
   const [vehicle, setVehicle] = useState(null);
   const [form, setForm] = useState(EMPTY_VEHICLE);
@@ -235,7 +239,12 @@ export function VehicleDetailScreen() {
       </View>
       {vehicle.ordenActivaId
         ? <Button variant="secondary" onPress={() => router.push(`/interno/ordenes/${vehicle.ordenActivaId}`)}>{`Ver orden activa #${vehicle.ordenActivaId}`}</Button>
-        : <Text style={styles.hint}>Sin orden activa.</Text>}
+        : <>
+          <Text style={styles.hint}>Sin orden activa.</Text>
+          {/* Reception is R-only; the screen re-reads owner and property from the server. */}
+          {canReceive && vehicle.activo ? <Button onPress={() => router.push({ pathname: "/interno/ordenes/nueva",
+            params: { vehiculoId: String(vehicle.id) } })}>Nueva recepción</Button> : null}
+        </>}
       <Notice value={message.text} tone={message.tone} />
       {discarded ? <Text style={styles.warning}>Tu borrador no guardado era: {Object.entries(discarded).map(([field, value]) => `${field}: ${value ?? "(vacío)"}`).join(" · ")}</Text> : null}
 
