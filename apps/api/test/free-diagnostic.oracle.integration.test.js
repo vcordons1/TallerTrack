@@ -221,6 +221,35 @@ test("HTTP and TT_APP perform the free diagnosis path against independent Oracle
   assert.equal(reports[0].detalleTecnico, "Sensor revisado nuevamente");
   assert.equal((await request("reception", diagnoses)).payload.data[0].detalleTecnico, null);
 
+  // TT-029: TX T02 is atomic — a failure while writing the report leaves no command and no revision.
+  const ownerT02 = await oracledb.getConnection({ user: process.env.TT_DB_USER,
+    password: process.env.TT_DB_PASSWORD, connectString: process.env.TT_ORACLE_CONNECT_STRING });
+  let t02TriggerCreated = false;
+  try {
+    await ownerT02.execute(`CREATE OR REPLACE TRIGGER dg_test_report_failure
+      BEFORE INSERT ON diagnostico FOR EACH ROW
+      BEGIN
+        IF :NEW.id_orden = 600 THEN RAISE_APPLICATION_ERROR(-20999, 'Injected report failure'); END IF;
+      END;`);
+    t02TriggerCreated = true;
+    const failedReport = await request("mechanic", `${diagnoses}/confirmar`, "POST", report, 26);
+    assert.equal(failedReport.status, 500);
+    const afterReportFailure = await ownerT02.execute(`SELECT
+      (SELECT COUNT(*) FROM diagnostico WHERE id_orden = 600),
+      (SELECT COUNT(*) FROM comando WHERE clave_idempotencia = :commandKey) FROM dual`, { commandKey: key(26) });
+    assert.deepEqual(afterReportFailure.rows[0], [2, 0]);
+  } finally {
+    if (t02TriggerCreated) await ownerT02.execute("DROP TRIGGER dg_test_report_failure");
+    await ownerT02.close();
+  }
+  // Two simultaneous D02 on the same work serialize on the work lock: distinct consecutive revisions.
+  const concurrentReports = await Promise.all([
+    request("mechanic", `${diagnoses}/confirmar`, "POST", { ...report, resumenCliente: "Revisión A" }, 27),
+    request("mechanic", `${diagnoses}/confirmar`, "POST", { ...report, resumenCliente: "Revisión B" }, 28),
+  ]);
+  assert.deepEqual(concurrentReports.map((result) => result.status), [201, 201]);
+  assert.deepEqual(concurrentReports.map((result) => result.payload.data.numeroRevision).sort(), [3, 4]);
+
   const concurrencyAssign = await Promise.all([
     request("reception", `${order}/asignar-mecanico`, "POST", { mecanicoId: "102", motivo: "Ayuda" }, 15),
     request("reception", `${order}/asignar-mecanico`, "POST", { mecanicoId: "102", motivo: "Ayuda" }, 16),

@@ -123,3 +123,37 @@ test("T02/T04/D02 accept only the free technical variant and no actor IDs", asyn
   value.setRoles(["CLIENTE"]);
   assert.equal((await value.request("/interno/ordenes/2/trabajos")).status, 403);
 });
+
+test("TT-029: only MECANICO reaches T02/T04/D02 and the T04 reason respects Texto(1000)", async (t) => {
+  const value = await fixture(t);
+  const commands = [
+    ["/interno/ordenes/2/trabajos", { tipo: "DIAGNOSTICO", tipoServicio: "DIAGNOSTICO",
+      descripcion: "Revisar falla", diagnosticoGratuito: true }],
+    ["/interno/ordenes/2/trabajos/4/iniciar", { versionEsperada: "1", motivo: "Iniciar" }],
+    ["/interno/ordenes/2/diagnosticos/confirmar", { trabajoDiagnosticoId: "4", detalleTecnico: "Hallazgo",
+      resumenCliente: "Resumen" }],
+  ];
+  for (const roles of [["ADMINISTRADOR"], ["RECEPCIONISTA"], ["INVENTARIO"]]) {
+    value.setRoles(roles);
+    for (const [path, payload] of commands) {
+      const response = await value.request(path, "POST", payload);
+      assert.equal(response.status, 403, `${roles} ${path}`);
+      assert.equal((await response.json()).error.code, "ACCION_NO_PERMITIDA");
+    }
+  }
+  const before = value.calls.length;
+  value.setRoles(["ADMINISTRADOR"]);
+  assert.equal((await value.request("/interno/ordenes/2/trabajos")).status, 200);
+  value.setRoles(["RECEPCIONISTA"]);
+  assert.equal((await value.request("/interno/ordenes/2/diagnosticos")).status, 200);
+  assert.equal(value.calls.slice(before).every(([kind]) => kind === "works" || kind === "diagnoses"), true,
+    "refused commands never reach Oracle");
+  value.setRoles(["MECANICO"]);
+  const start = "/interno/ordenes/2/trabajos/4/iniciar";
+  for (const motivo of ["", "   ", "x".repeat(1001)]) {
+    assert.equal((await value.request(start, "POST", { versionEsperada: "1", motivo })).status, 400);
+  }
+  assert.equal((await value.request(start, "POST", { versionEsperada: "1", motivo: "x".repeat(1000) })).status, 200);
+  assert.equal(value.calls.at(-1)[1].reason, "x".repeat(1000));
+  assert.equal((await value.request(start, "POST", { versionEsperada: "1" })).status, 400);
+});

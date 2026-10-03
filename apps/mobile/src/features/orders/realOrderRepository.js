@@ -23,7 +23,7 @@ export const realOrderRepository = Object.freeze({
     const text = q?.trim() ? `&q=${encodeURIComponent(q.trim())}` : "";
     return api.request(`/interno/mecanicos?ordenId=${encodeURIComponent(id)}&limite=50${text}${page(cursor)}`);
   },
-  // TT-024 free-diagnostic reads/commands, kept for TT-029 (see FreeDiagnosticSection.js).
+  // TT-024 free-diagnostic reads/commands, rendered by FreeDiagnosticSection.js since TT-029.
   async loadWorks(id, cursor) {
     return api.request(`/interno/ordenes/${encodeURIComponent(id)}/trabajos?limite=100${page(cursor)}`);
   },
@@ -37,9 +37,10 @@ export const realOrderRepository = Object.freeze({
       headers: { "Idempotency-Key": key }, uncertainBusinessResult: true,
     });
   },
-  async startFreeDiagnosis(id, workId, version, key) {
+  // The reason is written by the mechanic (T04 motivo:Texto(1000)).
+  async startFreeDiagnosis(id, workId, version, reason, key) {
     return api.request(`/interno/ordenes/${encodeURIComponent(id)}/trabajos/${encodeURIComponent(workId)}/iniciar`, {
-      method: "POST", body: { versionEsperada: version, motivo: "Inicio de diagnóstico gratuito" },
+      method: "POST", body: { versionEsperada: version, motivo: reason },
       headers: { "Idempotency-Key": key }, uncertainBusinessResult: true,
     });
   },

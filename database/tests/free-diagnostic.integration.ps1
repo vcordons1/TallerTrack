@@ -200,7 +200,7 @@ select 'FACTS='||(select count(*) from orden_mecanico where id_orden=600)
  ||':'||(select count(*) from diagnostico where id_orden=600)
  ||':'||(select count(*) from orden_trabajo where id_orden=600 and estado='EN_DIAGNOSTICO') from dual;
 '@
-    if ($facts -notmatch 'FACTS=2:4:2:2:1') { throw "Unexpected diagnostic facts: $facts" }
+    if ($facts -notmatch 'FACTS=2:4:2:4:1') { throw "Unexpected diagnostic facts: $facts" }
     $invariants = Owner-Sql @'
 select 'INVARIANTS='||(select count(*) from trabajo_evento where tipo='INICIO' and (horas_aportadas is not null or costo_interno<>0))
  ||':'||(select count(*) from user_tables where table_name in ('CARGO_ORDEN','PRESUPUESTO','PRESUPUESTO_ITEM'))

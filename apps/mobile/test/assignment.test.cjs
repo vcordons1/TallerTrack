@@ -183,10 +183,16 @@ const current = { id: "7", mecanico: { id: "50", nombre: "Mecánico TT028" }, as
 const retired = { id: "6", mecanico: { id: "51", nombre: "Mecánico Dos" }, asignadoEn: "2026-10-02T15:30:00.000000Z",
   retiradoEn: "2026-10-02T15:40:00.000000Z", motivoRetiro: "Cambio de turno" };
 
-function server({ order = reception, participants = [current, retired], assign, retire, detailError } = {}) {
+function server({ order = reception, participants = [current, retired], assign, retire, detailError,
+  works = [], diagnoses = [], diagnosis = {} } = {}) {
   const calls = [];
   const request = async (url, options = {}) => {
     calls.push({ url, options });
+    if (url.includes("/trabajos?")) return { data: works };
+    if (url.includes("/diagnosticos?")) return { data: diagnoses };
+    if (url.endsWith("/trabajos")) return diagnosis.propose(options);
+    if (url.endsWith("/iniciar")) return diagnosis.start(options);
+    if (url.endsWith("/diagnosticos/confirmar")) return diagnosis.confirm(options);
     if (url.startsWith("/interno/mecanicos?")) return { data: [{ id: "50", nombre: "Mecánico TT028" }, { id: "52", nombre: "Mecánico Tres" }] };
     if (url.includes("/mecanicos?")) return { data: participants };
     if (url.endsWith("/asignar-mecanico")) return assign(options);
@@ -257,7 +263,7 @@ test("duplicate assignment shows the server rejection; unknown retirement locks 
   await act(async () => tree.unmount());
 });
 
-test("technical detail shows no commercial data and no coordination or diagnostic actions", async () => {
+test("technical detail shows no commercial data and no coordination actions", async () => {
   const backendCalls = server({ order: base });
   const h = harness({ request: backendCalls.request, roles: ["MECANICO"] });
   const tree = await mount(React.createElement(h.detail.RealOrderDetailScreen,
@@ -266,10 +272,11 @@ test("technical detail shows no commercial data and no coordination or diagnosti
   assert.ok(backendCalls.calls.some(({ url }) => url === "/interno/ordenes/21?vista=TECNICA"));
   assert.ok(text.includes("VISTA TÉCNICA"));
   assert.ok(text.includes("Mecánico TT028"));
-  for (const hidden of ["Cliente contractual", "Asignar mecánico", "Retirar a", "Proponer diagnóstico", "Confirmar diagnóstico", "Saldo"]) {
+  for (const hidden of ["Cliente contractual", "Asignar mecánico", "Retirar a", "Confirmar diagnóstico", "Saldo"]) {
     assert.equal(text.includes(hidden), false, hidden);
   }
-  assert.equal(backendCalls.calls.some(({ url }) => url.includes("/trabajos") || url.includes("/diagnosticos")), false);
+  // TT-029 renders the free-diagnostic section (TT-028 kept it hidden).
+  assert.ok(text.includes("Trabajo diagnóstico gratuito"));
   await act(async () => tree.unmount());
 });
 
@@ -302,5 +309,102 @@ test("Mis órdenes requests vista=TECNICA, shows the empty state and opens the t
   await act(async () => item.props.onPress());
   assert.deepEqual(plain(h.moves.at(-1)), { pathname: "/interno/mis-ordenes/[id]", params: { id: "21" } });
   assert.equal(content(tree).includes("Cliente TT026"), false);
+  await act(async () => tree.unmount());
+});
+
+// --- TT-029 free diagnosis (T01/T02/T04/D01/D02) --------------------------------------------
+
+const technicalProps = { view: "TECNICA", listRoute: "/interno/mis-ordenes", listLabel: "Mis órdenes" };
+
+test("mechanic proposes, starts with a written reason and confirms the free diagnosis", async () => {
+  const order = { ...base };
+  const works = [];
+  const diagnoses = [];
+  const backendCalls = server({ order, works, diagnoses, diagnosis: {
+    propose: async () => { works.push({ id: "30", version: "1", tipo: "DIAGNOSTICO", tipoServicio: "DIAGNOSTICO",
+      descripcion: "Revisar ruido", estado: "PROPUESTO", diagnosticoGratuito: true });
+      return { data: { trabajoId: "30", version: "1", estado: "PROPUESTO" } }; },
+    start: async () => { Object.assign(works[0], { estado: "EN_EJECUCION", version: "2" }); order.estado = "EN_DIAGNOSTICO";
+      return { data: { trabajoId: "30", version: "2", estado: "EN_EJECUCION", ordenEstado: "EN_DIAGNOSTICO" } }; },
+    confirm: async () => { diagnoses.push({ id: "40", numeroRevision: 1, trabajoDiagnosticoId: "30",
+      detalleTecnico: "Rodamiento gastado", resumenCliente: "Hay que cambiar un rodamiento",
+      confirmadoEn: "2026-10-02T18:00:00.000000Z" });
+      return { data: { diagnosticoId: "40", numeroRevision: 1, evidenciasIds: [] } }; },
+  } });
+  const h = harness({ request: backendCalls.request, roles: ["MECANICO"] });
+  const tree = await mount(React.createElement(h.detail.RealOrderDetailScreen, technicalProps));
+  assert.ok(content(tree).includes("Todavía no hay trabajos"));
+  assert.equal(pressable(tree, "Proponer diagnóstico gratuito").props.disabled, true, "a description is required");
+  await act(async () => input(tree, "Descripción del diagnóstico").props.onChangeText("Revisar ruido"));
+  await press(tree, "Proponer diagnóstico gratuito");
+  const proposal = backendCalls.calls.find(({ url, options }) => url.endsWith("/trabajos") && options.method === "POST");
+  assert.deepEqual(plain(proposal.options.body), { tipo: "DIAGNOSTICO", tipoServicio: "DIAGNOSTICO",
+    descripcion: "Revisar ruido", diagnosticoGratuito: true });
+  assert.ok(content(tree).includes("Propuesto · Gratuito"));
+  assert.equal(pressable(tree, "Proponer diagnóstico gratuito"), undefined, "one active free diagnosis at a time");
+  assert.equal(pressable(tree, "Iniciar diagnóstico").props.disabled, true, "a reason is required");
+  await act(async () => input(tree, "Motivo del inicio").props.onChangeText("Cliente autorizó revisar"));
+  await press(tree, "Iniciar diagnóstico");
+  const start = backendCalls.calls.find(({ url }) => url.endsWith("/iniciar"));
+  assert.equal(start.url, "/interno/ordenes/21/trabajos/30/iniciar");
+  assert.deepEqual(plain(start.options.body), { versionEsperada: "1", motivo: "Cliente autorizó revisar" });
+  assert.ok(content(tree).includes("En diagnóstico"));
+  await act(async () => input(tree, "Detalle técnico").props.onChangeText("Rodamiento gastado"));
+  await act(async () => input(tree, "Resumen para cliente").props.onChangeText("Hay que cambiar un rodamiento"));
+  await press(tree, "Confirmar diagnóstico");
+  const confirm = backendCalls.calls.find(({ url }) => url.endsWith("/diagnosticos/confirmar"));
+  assert.deepEqual(plain(confirm.options.body), { trabajoDiagnosticoId: "30", detalleTecnico: "Rodamiento gastado",
+    resumenCliente: "Hay que cambiar un rodamiento" });
+  const keys = [proposal, start, confirm].map(({ options }) => options.headers["Idempotency-Key"]);
+  assert.equal(new Set(keys).size, 3, "each intention has its own key");
+  const text = content(tree);
+  assert.ok(text.includes("Hay que cambiar un rodamiento") && text.includes("Rodamiento gastado"));
+  assert.equal(pressable(tree, "Confirmar diagnóstico"), undefined, "the confirmed report hides the form");
+  await act(async () => tree.unmount());
+});
+
+test("unknown start result locks the form and verifies with the same key; rejections are readable", async () => {
+  const works = [{ id: "30", version: "1", tipo: "DIAGNOSTICO", tipoServicio: "DIAGNOSTICO",
+    descripcion: "Revisar ruido", estado: "PROPUESTO", diagnosticoGratuito: true }];
+  let starts = 0;
+  const backendCalls = server({ order: { ...base }, works, diagnosis: {
+    start: async () => {
+      starts += 1;
+      if (starts === 1) throw fail({ status: 0, uncertain: true });
+      throw fail({ status: 409, code: "ESTADO_INCOMPATIBLE", uncertain: false });
+    },
+  } });
+  const h = harness({ request: backendCalls.request, roles: ["MECANICO"] });
+  const tree = await mount(React.createElement(h.detail.RealOrderDetailScreen, technicalProps));
+  await act(async () => input(tree, "Motivo del inicio").props.onChangeText("Revisión inicial"));
+  await press(tree, "Iniciar diagnóstico");
+  assert.ok(content(tree).includes("Resultado desconocido"));
+  assert.equal(input(tree, "Motivo del inicio").props.editable, false);
+  assert.equal(pressable(tree, "Iniciar diagnóstico").props.disabled, true);
+  await press(tree, "Verificar este mismo envío");
+  const sent = backendCalls.calls.filter(({ url }) => url.endsWith("/iniciar"));
+  assert.equal(sent.length, 2);
+  assert.equal(sent[0].options.headers["Idempotency-Key"], sent[1].options.headers["Idempotency-Key"]);
+  assert.deepEqual(plain(sent[0].options.body), plain(sent[1].options.body));
+  const text = content(tree);
+  assert.ok(text.includes("quizá ya se inició") && text.includes("(ESTADO_INCOMPATIBLE)"));
+  assert.equal(text.includes("Ocurrió un error"), false);
+  assert.equal(input(tree, "Motivo del inicio").props.editable, true, "a definitive rejection unlocks the form");
+  await act(async () => tree.unmount());
+});
+
+test("receptionist sees EN_DIAGNOSTICO and the report summary without technical actions", async () => {
+  const backendCalls = server({ order: { ...reception, estado: "EN_DIAGNOSTICO" }, diagnoses: [{ id: "40",
+    numeroRevision: 1, trabajoDiagnosticoId: "30", detalleTecnico: null, resumenCliente: "Cambiar rodamiento",
+    confirmadoEn: "2026-10-02T18:00:00.000000Z" }] });
+  const h = harness({ request: backendCalls.request, roles: ["RECEPCIONISTA"] });
+  const tree = await mount(React.createElement(h.detail.RealOrderDetailScreen));
+  const text = content(tree);
+  assert.ok(text.includes("En diagnóstico"));
+  assert.ok(text.includes("Informes diagnósticos") && text.includes("Cambiar rodamiento"));
+  for (const hidden of ["Trabajo diagnóstico gratuito", "Proponer diagnóstico", "Iniciar diagnóstico", "Detalle técnico"]) {
+    assert.equal(text.includes(hidden), false, hidden);
+  }
+  assert.equal(backendCalls.calls.some(({ url }) => url.includes("/trabajos")), false);
   await act(async () => tree.unmount());
 });

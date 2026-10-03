@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { useSession } from "../../session/SessionProvider";
 import { colors, radii, spacing, typography } from "../../theme/tokens";
+import { FreeDiagnosticSection } from "./FreeDiagnosticSection";
 import { MechanicsSection } from "./MechanicsSection";
 import { realOrderRepository } from "./realOrderRepository";
 
@@ -115,6 +116,9 @@ export function RealOrderDetailScreen({ view: requestedView, listRoute = "/inter
           canCoordinate={!technical && reception}
           assignable={state.order.proposito === "COMERCIAL" && ASSIGNABLE_STATES.includes(state.order.estado)}
           onChanged={refresh} />
+        {/* TT-029: TECNICA acts on the free diagnosis; RECEPCION reads the confirmed reports. */}
+        <FreeDiagnosticSection orderId={id} order={state.order} technical={technical}
+          reloadKey={reload} onChanged={refresh} />
       </> : null}
     </View>
   </ScreenContainer>;
