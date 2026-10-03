@@ -71,6 +71,37 @@ test("O06 derives actor from session and rejects caller controlled authority", a
   assert.equal((await value.request(path, "POST", { mecanicoId: "15", motivo: "Diagnóstico" })).status, 403);
 });
 
+test("I15 requires ordenId and an operational role; A and I are refused before Oracle", async (t) => {
+  const value = await fixture(t);
+  assert.equal((await value.request("/interno/mecanicos")).status, 400);
+  assert.equal((await value.request("/interno/mecanicos?ordenId=2&q=ana")).status, 200);
+  assert.equal(value.calls.at(-1)[1].q, "ana");
+  assert.equal(value.calls.at(-1)[1].actorId, "7");
+  const before = value.calls.length;
+  for (const roles of [["ADMINISTRADOR"], ["INVENTARIO"], ["CLIENTE"]]) {
+    value.setRoles(roles);
+    assert.equal((await value.request("/interno/mecanicos?ordenId=2")).status, 403);
+  }
+  value.setRoles(["INVENTARIO"]);
+  assert.equal((await value.request("/interno/ordenes/2/mecanicos")).status, 403);
+  assert.equal(value.calls.length, before);
+});
+
+test("O07 sends only the participation, reason and session-derived actor", async (t) => {
+  const value = await fixture(t);
+  const path = "/interno/ordenes/2/participaciones/9/retirar";
+  assert.equal((await value.request(path, "POST", { motivo: "  Cambio de turno  " })).status, 200);
+  const [operation, input] = value.calls.at(-1);
+  assert.equal(operation, "RETIRAR_MECANICO");
+  assert.deepEqual([input.orderId, input.resourceId, input.reason, input.actorId, input.sessionId],
+    ["2", "9", "Cambio de turno", "7", "8"]);
+  for (const body of [{ motivo: " " }, { motivo: "X", retiradoPor: "99" }, {}]) {
+    assert.equal((await value.request(path, "POST", body)).status, 400);
+  }
+  value.setRoles(["ADMINISTRADOR"]);
+  assert.equal((await value.request(path, "POST", { motivo: "X" })).status, 403);
+});
+
 test("T02/T04/D02 accept only the free technical variant and no actor IDs", async (t) => {
   const value = await fixture(t);
   value.setRoles(["MECANICO"]);

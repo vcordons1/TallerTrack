@@ -139,7 +139,7 @@ test("I10-I14 real Oracle: creation/login, live authority, replay, history, roll
     await mobile.login(createBody.login, password);
     const identity = await mobile.identity();
     assert.equal(identity.usuarioId, employeeId); assert.deepEqual(identity.roles, ["MECANICO"]);
-    assert.deepEqual(getInternalDestinations(identity.roles).map((d) => d.key), ["home", "orders"]);
+    assert.deepEqual(getInternalDestinations(identity.roles).map((d) => d.key), ["home", "myOrders"]); // TT-028: M works in «Mis órdenes»
     assert.equal(JSON.stringify(saved).includes(password), false);
     await mobile.logout(); assert.equal(saved, null);
   });

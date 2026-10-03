@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location -LiteralPath $repo
-Write-Host 'TallerTrack: migrar entorno local (V022), completar grants runtime, preparar primer Administrador si falta y ejecutar API por USB.'
+Write-Host 'TallerTrack: migrar entorno local (V023), completar grants runtime, preparar primer Administrador si falta y ejecutar API por USB.'
 Write-Host 'Las contraseñas se piden sin eco; no se guardan en archivos ni se cambian cuentas Oracle existentes.'
 $ownerSecret = $OwnerPassword
 $runtimeSecret = $RuntimePassword

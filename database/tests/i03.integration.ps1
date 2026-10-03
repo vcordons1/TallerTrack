@@ -150,7 +150,7 @@ try {
     $second = Invoke-Flyway 'migrate'
     $validate = Invoke-Flyway 'validate'
     Assert-Output 'second migrate no-op' $second 'Schema .* is up to date|No migration necessary'
-    Assert-Output 'Flyway validation' $validate 'Successfully validated 22 migrations'
+    Assert-Output 'Flyway validation' $validate 'Successfully validated 23 migrations'
 
     $structure = Invoke-SysSql @"
 alter session set current_schema=$schema;

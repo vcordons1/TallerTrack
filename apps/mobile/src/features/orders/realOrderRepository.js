@@ -2,6 +2,10 @@ import { api } from "../../api/runtime";
 
 const { orderListQuery } = require("./orderListQuery.cjs");
 
+function page(cursor) {
+  return cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+}
+
 export const realOrderRepository = Object.freeze({
   async loadPage(view, cursor, filters = {}) {
     const result = await api.request(`/interno/ordenes?${orderListQuery(view, cursor, filters)}`);
@@ -10,27 +14,21 @@ export const realOrderRepository = Object.freeze({
   async loadDetail(id, view) {
     return (await api.request(`/interno/ordenes/${encodeURIComponent(id)}?vista=${encodeURIComponent(view)}`)).data;
   },
+  // O05 keeps current and retired participations.
   async loadParticipants(id, cursor) {
-    const suffix = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
-    return api.request(`/interno/ordenes/${encodeURIComponent(id)}/mecanicos?limite=100${suffix}`);
+    return api.request(`/interno/ordenes/${encodeURIComponent(id)}/mecanicos?limite=100${page(cursor)}`);
   },
-  async loadEligibleMechanics(id, cursor) {
-    const suffix = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
-    return api.request(`/interno/mecanicos?ordenId=${encodeURIComponent(id)}&limite=100${suffix}`);
+  // I15 is scoped to the order; the server filters by name (q).
+  async searchEligibleMechanics(id, q, cursor) {
+    const text = q?.trim() ? `&q=${encodeURIComponent(q.trim())}` : "";
+    return api.request(`/interno/mecanicos?ordenId=${encodeURIComponent(id)}&limite=50${text}${page(cursor)}`);
   },
+  // TT-024 free-diagnostic reads/commands, kept for TT-029 (see FreeDiagnosticSection.js).
   async loadWorks(id, cursor) {
-    const suffix = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
-    return api.request(`/interno/ordenes/${encodeURIComponent(id)}/trabajos?limite=100${suffix}`);
+    return api.request(`/interno/ordenes/${encodeURIComponent(id)}/trabajos?limite=100${page(cursor)}`);
   },
   async loadDiagnoses(id, cursor) {
-    const suffix = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
-    return api.request(`/interno/ordenes/${encodeURIComponent(id)}/diagnosticos?limite=100${suffix}`);
-  },
-  async assignMechanic(id, mechanicId, key) {
-    return api.request(`/interno/ordenes/${encodeURIComponent(id)}/asignar-mecanico`, {
-      method: "POST", body: { mecanicoId: mechanicId, motivo: "Asignación para diagnóstico" },
-      headers: { "Idempotency-Key": key }, uncertainBusinessResult: true,
-    });
+    return api.request(`/interno/ordenes/${encodeURIComponent(id)}/diagnosticos?limite=100${page(cursor)}`);
   },
   async proposeFreeDiagnosis(id, description, key) {
     return api.request(`/interno/ordenes/${encodeURIComponent(id)}/trabajos`, {

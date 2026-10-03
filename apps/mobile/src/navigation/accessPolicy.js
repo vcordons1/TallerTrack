@@ -15,6 +15,7 @@ const CAPABILITIES = Object.freeze({
   INTERNAL_HOME: "INTERNAL_HOME",
   ORDERS_READ: "ORDERS_READ",
   ORDERS_WORKSPACE: "ORDERS_WORKSPACE",
+  TECHNICAL_ORDERS: "TECHNICAL_ORDERS",
   RECEPTION_CREATE: "RECEPTION_CREATE",
   AGENDA_WORKSPACE: "AGENDA_WORKSPACE",
   INVENTORY_WORKSPACE: "INVENTORY_WORKSPACE",
@@ -39,6 +40,14 @@ const INTERNAL_DESTINATIONS = Object.freeze([
     title: "Órdenes",
     icon: "clipboard-text-outline",
     capability: CAPABILITIES.ORDERS_WORKSPACE,
+  }),
+  Object.freeze({
+    key: "myOrders",
+    segment: "mis-ordenes",
+    route: "/interno/mis-ordenes",
+    title: "Mis órdenes",
+    icon: "wrench-outline",
+    capability: CAPABILITIES.TECHNICAL_ORDERS,
   }),
   Object.freeze({
     key: "agenda",
@@ -81,10 +90,14 @@ function deriveInternalCapabilities(roles = []) {
 
   if (
     assignedRoles.has(ROLES.RECEPCIONISTA) ||
-    assignedRoles.has(ROLES.MECANICO) ||
     assignedRoles.has(ROLES.INVENTARIO)
   ) {
     capabilities.add(CAPABILITIES.ORDERS_WORKSPACE);
+  }
+
+  // A mechanic works only on orders with a current participation (O01/O03 TECNICA).
+  if (assignedRoles.has(ROLES.MECANICO)) {
+    capabilities.add(CAPABILITIES.TECHNICAL_ORDERS);
   }
 
   if (assignedRoles.has(ROLES.RECEPCIONISTA)) {

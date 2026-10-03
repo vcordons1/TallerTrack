@@ -149,7 +149,7 @@ select 'USERS_ERRORS='||count(*) from dba_errors where owner='$cleanSchema' and 
     if ($cleanUserPackage -notmatch 'USERS_VALID=2' -or $cleanUserPackage -notmatch 'USERS_ERRORS=0') {
         throw "Internal-user package failed clean-install compilation: $cleanUserPackage"
     }
-    Write-Output 'PASS migration: clean schema applied V001 through V022.'
+    Write-Output 'PASS migration: clean schema applied V001 through V023.'
 
     New-TestOwner $upgradeSchema $upgradePassword; $created.Add($upgradeSchema)
     Set-OwnerEnvironment $upgradeSchema $upgradePassword
@@ -175,7 +175,7 @@ select 'CONDITIONAL_UQ='||count(*) from all_indexes where owner='$upgradeSchema'
  and index_name in ('UQ_USUARIO_ROL_VIGENTE','UQ_TOKEN_RENOVACION_ACTIVA') and uniqueness='UNIQUE';
 "@
     $history = Invoke-SysSql @"
-select 'MIGRATION_COUNT='||count(*) from $upgradeSchema."flyway_schema_history" where "version" in ('001','002','003','004','005','006','007','008','009','010','011','012','013','014','015','016','017','018','019','020','021','022') and "success"=1;
+select 'MIGRATION_COUNT='||count(*) from $upgradeSchema."flyway_schema_history" where "version" in ('001','002','003','004','005','006','007','008','009','010','011','012','013','014','015','016','017','018','019','020','021','022','023') and "success"=1;
 select 'DUPLICATES='||count(*) from (select "version" from $upgradeSchema."flyway_schema_history" group by "version" having count(*)>1);
 select 'VERSIONS='||listagg("version",',') within group(order by "installed_rank") from $upgradeSchema."flyway_schema_history" where "success"=1;
 select 'IDENTITY_VALID='||count(*) from dba_objects where owner='$upgradeSchema' and object_name in ('PKG_IDENTIDAD','PKG_IDENTIDAD_BOOTSTRAP') and object_type in ('PACKAGE','PACKAGE BODY') and status='VALID';
@@ -194,8 +194,8 @@ select 'CUSTOMER_VEHICLE_ERRORS='||count(*) from dba_errors where owner='$upgrad
     if ($history -notmatch 'USERS_VALID=2' -or $history -notmatch 'USERS_ERRORS=0') {
         throw "Internal-user package failed upgrade compilation: $history"
     }
-    if ($history -notmatch 'MIGRATION_COUNT=22' -or $history -notmatch 'DUPLICATES=0' -or $history -notmatch 'VERSIONS=001,002,003,004,005,006,007,008,009,010,011,012,013,014,015,016,017,018,019,020,021,022' -or $history -notmatch 'IDENTITY_VALID=4' -or $history -notmatch 'IDENTITY_ERRORS=0' -or $history -notmatch 'RECEPTION_VALID=2' -or $history -notmatch 'RECEPTION_ERRORS=0' -or $history -notmatch 'QUERY_VALID=4' -or $history -notmatch 'QUERY_ERRORS=0' -or $history -notmatch 'DIAGNOSTIC_VALID=2' -or $history -notmatch 'DIAGNOSTIC_ERRORS=0' -or $history -notmatch 'CUSTOMER_VEHICLE_VALID=2' -or $history -notmatch 'CUSTOMER_VEHICLE_ERRORS=0') { throw "Unexpected history: $history" }
-    if ($info -notmatch 'Success' -or $validate -notmatch 'Successfully validated 22 migrations') { throw 'Flyway info/validate was not green for twenty-two migrations.' }
+    if ($history -notmatch 'MIGRATION_COUNT=23' -or $history -notmatch 'DUPLICATES=0' -or $history -notmatch 'VERSIONS=001,002,003,004,005,006,007,008,009,010,011,012,013,014,015,016,017,018,019,020,021,022,023' -or $history -notmatch 'IDENTITY_VALID=4' -or $history -notmatch 'IDENTITY_ERRORS=0' -or $history -notmatch 'RECEPTION_VALID=2' -or $history -notmatch 'RECEPTION_ERRORS=0' -or $history -notmatch 'QUERY_VALID=4' -or $history -notmatch 'QUERY_ERRORS=0' -or $history -notmatch 'DIAGNOSTIC_VALID=2' -or $history -notmatch 'DIAGNOSTIC_ERRORS=0' -or $history -notmatch 'CUSTOMER_VEHICLE_VALID=2' -or $history -notmatch 'CUSTOMER_VEHICLE_ERRORS=0') { throw "Unexpected history: $history" }
+    if ($info -notmatch 'Success' -or $validate -notmatch 'Successfully validated 23 migrations') { throw 'Flyway info/validate was not green for twenty-three migrations.' }
 
     Add-Content (Join-Path $mutated 'V001__technical_baseline.sql') '-- intentional checksum mutation'
     $env:FLYWAY_LOCATIONS = 'filesystem:' + $mutated.Replace('\','/')
@@ -265,9 +265,9 @@ commit;
     $allOutput = $authenticationFailure+$cleanMigrate+$cleanValidate+$upgrade+$second+$info+$validate+$history+$checksumFailure
     foreach ($password in $cleanPassword,$upgradePassword) { if ($allOutput.Contains($password)) { throw 'Test output exposed a generated password.' } }
     Write-Output 'PASS bootstrap: only required object-creation privileges and a 20 MiB quota.'
-    Write-Output 'PASS upgrade/idempotency: V017 upgraded through V022; second migrate duplicated neither history nor seeds.'
+    Write-Output 'PASS upgrade/idempotency: V017 upgraded through V023; second migrate duplicated neither history nor seeds.'
     Write-Output 'PASS structure/seeds: nine I01 tables, critical types, enabled constraints, conditional indexes, five roles, and singleton configuration.'
-    Write-Output 'PASS validation: Flyway validated V001-V022, identity/reception/query/diagnostic/user/customer-vehicle packages are VALID without USER_ERRORS, and a changed applied V001 was rejected.'
+    Write-Output 'PASS validation: Flyway validated V001-V023, identity/reception/query/diagnostic/user/customer-vehicle packages are VALID without USER_ERRORS, and a changed applied V001 was rejected.'
     Write-Output "ORACLE_EVIDENCE $($history -replace '\s+',' ')"
     Write-Output "SCHEMA_EVIDENCE $($schemaEvidence -replace '\s+',' ')"
 }

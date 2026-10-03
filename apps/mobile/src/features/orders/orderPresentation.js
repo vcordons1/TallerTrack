@@ -102,6 +102,10 @@ function getOrderDetailRoute(id) {
   return { pathname: "/interno/ordenes/[id]", params: { id: String(id) } };
 }
 
+function getTechnicalOrderDetailRoute(id) {
+  return { pathname: "/interno/mis-ordenes/[id]", params: { id: String(id) } };
+}
+
 function getVehicleLabel(vehicle) {
   if (!vehicle) return "Orden de servicio";
   return [vehicle.marca, vehicle.modelo, vehicle.anio].filter(Boolean).join(" ");
@@ -169,6 +173,7 @@ module.exports = {
   getOrderCode,
   getOrderDetailRoute,
   getOrderView,
+  getTechnicalOrderDetailRoute,
   getVehicleLabel,
   normalizeOrderFilter,
 };

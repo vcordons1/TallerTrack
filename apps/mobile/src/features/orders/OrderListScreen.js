@@ -22,6 +22,7 @@ const {
   filterOrders,
   getOrderDetailRoute,
   getOrderView,
+  getTechnicalOrderDetailRoute,
   normalizeOrderFilter,
 } = require("./orderPresentation");
 
@@ -118,14 +119,18 @@ export function OrderListScreen({ repository = demoOrderRepository, realReceptio
         data={visibleOrders}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         keyExtractor={(order) => order.id}
-        ListEmptyComponent={<OrdersEmpty filtered={filter !== ORDER_FILTERS.ALL} />}
+        ListEmptyComponent={realTechnical
+          ? <OrdersEmpty filtered={filter !== ORDER_FILTERS.ALL} title="Sin órdenes asignadas"
+            supporting="Cuando recepción te asigne a una orden aparecerá aquí. Desliza hacia abajo para actualizar." />
+          : <OrdersEmpty filtered={filter !== ORDER_FILTERS.ALL} />}
         ListFooterComponent={realOrders ? nextCursor ? <Pressable accessibilityRole="button"
           disabled={loadingMore} onPress={loadMore} style={{ minHeight: 52, justifyContent: "center", alignItems: "center" }}>
           <Text style={{ ...typography.bodyStrong, color: colors.primary }}>{loadingMore ? "Cargando…" : pageError ? "Error al cargar. Reintentar" : "Cargar más órdenes"}</Text>
         </Pressable> : null : <Text style={styles.demoNotice}>Modo demostración · consulta solamente</Text>}
         ListHeaderComponent={(
           <View style={styles.headerContent}>
-            <ProductHeader context="Supervisión de atenciones" title="Órdenes" />
+            <ProductHeader context={realTechnical ? "Órdenes con tu participación vigente" : "Supervisión de atenciones"}
+              title={realTechnical ? "Mis órdenes" : "Órdenes"} />
             {realReception ? <Pressable accessibilityRole="button" onPress={() => router.push("/interno/ordenes/nueva")}
               style={{ minHeight: 52, justifyContent: "center", alignItems: "center", borderRadius: radii.md, backgroundColor: colors.primary }}>
               <Text style={{ ...typography.bodyStrong, color: colors.onPrimary }}>Nueva recepción</Text>
@@ -157,7 +162,8 @@ export function OrderListScreen({ repository = demoOrderRepository, realReceptio
         )}
         refreshControl={<RefreshControl colors={[colors.primary]} onRefresh={refresh} refreshing={refreshing} tintColor={colors.primary} />}
         renderItem={({ item }) => (
-          <OrderListItem order={item} onPress={() => router.push(getOrderDetailRoute(item.id))} />
+          <OrderListItem order={item} onPress={() => router.push(realTechnical
+            ? getTechnicalOrderDetailRoute(item.id) : getOrderDetailRoute(item.id))} />
         )}
       />
     </SafeAreaView>

@@ -71,12 +71,12 @@ test("multiple internal roles compose their destinations", () => {
   ]);
 });
 
-test("a mechanic only receives home and orders", () => {
+test("a mechanic only receives home and its assigned orders (TT-028)", () => {
   const destinations = getInternalDestinations([ROLES.MECANICO]).map(
     ({ key }) => key,
   );
 
-  assert.deepEqual(destinations, ["home", "orders"]);
+  assert.deepEqual(destinations, ["home", "myOrders"]);
 });
 
 test("only an explicit receptionist role can create reception", () => {

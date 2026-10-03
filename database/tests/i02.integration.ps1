@@ -165,7 +165,7 @@ try {
     $second = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $flyway migrate 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { throw "Second Flyway migrate failed: $second" }
     $validate = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $flyway validate 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0 -or $validate -notmatch 'Successfully validated 22 migrations') { throw "Flyway validate failed: $validate" }
+    if ($LASTEXITCODE -ne 0 -or $validate -notmatch 'Successfully validated 23 migrations') { throw "Flyway validate failed: $validate" }
 
     $structure = Invoke-SysSql @"
 alter session set current_schema=$schema;

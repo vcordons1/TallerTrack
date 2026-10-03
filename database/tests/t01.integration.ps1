@@ -145,7 +145,7 @@ try {
     $second = Invoke-Flyway 'migrate'
     $validate = Invoke-Flyway 'validate'
     Assert-Output 'second migration is idempotent' $second 'Schema .* is up to date|No migration necessary'
-    Assert-Output 'current migrations validate' $validate 'Successfully validated 22 migrations'
+    Assert-Output 'current migrations validate' $validate 'Successfully validated 23 migrations'
 
     $packageEvidence = Invoke-SysSql @"
 select 'VALID='||count(*) from all_objects where owner='$schema' and object_name in ('PKG_ORDENES','PKG_RECEPCION_HTTP') and object_type in ('PACKAGE','PACKAGE BODY') and status='VALID';
@@ -480,7 +480,7 @@ select 'INVARIANTS='||(select count(*) from orden_trabajo o where not exists(sel
 "@
     Assert-Output 'final invariants' $finalEvidence 'INVARIANTS=0:0:0:0:0'
 
-    Write-Output 'PASS T01 migration: V013 upgrade through V022, second migrate, Flyway validate, and valid PKG_ORDENES/PKG_RECEPCION_HTTP bodies.'
+    Write-Output 'PASS T01 migration: V013 upgrade through V023, second migrate, Flyway validate, and valid PKG_ORDENES/PKG_RECEPCION_HTTP bodies.'
     Write-Output 'PASS T01 operation: direct COMERCIAL opening persists order, APERTURA event, 1..N reception evidence, command, and audit atomically; real Node/filesystem/Oracle orchestration passed.'
     Write-Output 'PASS T01 guards: exact receptionist role, active actor/vehicle, current expected ownership, active-order exclusion, and conservative delivered-order debt guard.'
     Write-Output 'PASS T01 idempotency/replay: same command returns its order; incompatible key and object reuse fail; intermediate evidence failure leaves no partial facts.'

@@ -294,12 +294,13 @@ export function OrdersError({ title, message, onRetry, onBack }) {
   );
 }
 
-export function OrdersEmpty({ filtered = false }) {
+export function OrdersEmpty({ filtered = false, title = "Aún no hay órdenes",
+  supporting = "La lectura fue correcta, pero no devolvió atenciones." }) {
   return (
     <View accessible style={styles.emptyState}>
       <MaterialCommunityIcons accessible={false} color={colors.textSecondary} name="clipboard-text-clock-outline" size={28} />
-      <Text style={styles.emptyTitle}>{filtered ? "No hay órdenes en este filtro" : "Aún no hay órdenes"}</Text>
-      <Text style={styles.emptySupporting}>{filtered ? "Selecciona otra vista para continuar revisando la operación." : "La lectura fue correcta, pero no devolvió atenciones."}</Text>
+      <Text style={styles.emptyTitle}>{filtered ? "No hay órdenes en este filtro" : title}</Text>
+      <Text style={styles.emptySupporting}>{filtered ? "Selecciona otra vista para continuar revisando la operación." : supporting}</Text>
     </View>
   );
 }
