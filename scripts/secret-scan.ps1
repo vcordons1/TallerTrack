@@ -9,7 +9,8 @@ como texto literal, en:
   - los archivos versionados del repo de código (`git ls-files`), excepto .data/.
 
 Solo imprime `cuenta → archivo: N` y un resumen. Nunca imprime un valor. Sale con 1 si hay coincidencias.
-Límite: solo conoce los secretos guardados en .data/local-credentials/ (no TT_OWNER, TT_APP ni admin.local).
+Límite: solo conoce los secretos guardados en .data/local-credentials/ (desde TT-031 incluye TT_OWNER y TT_APP;
+no incluye admin.local ni recepcion.local). No revisa Oracle.
 Uso (Git Bash o pwsh): powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/secret-scan.ps1
 #>
 param(

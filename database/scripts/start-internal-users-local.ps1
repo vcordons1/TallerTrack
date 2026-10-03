@@ -11,9 +11,26 @@ Set-StrictMode -Version Latest
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location -LiteralPath $repo
 Write-Host 'TallerTrack: migrar entorno local (V023), completar grants runtime, preparar primer Administrador si falta y ejecutar API por USB.'
-Write-Host 'Las contraseñas se piden sin eco; no se guardan en archivos ni se cambian cuentas Oracle existentes.'
+Write-Host 'TT_OWNER y TT_APP se leen de .data/local-credentials/ si existen; si no, se piden sin eco. No se cambian cuentas Oracle existentes.'
+# TT-031: las contraseñas Oracle locales se guardan a propósito en .data/ (ignorado por git); ver AGENTS.md §9.
+function Read-LocalOracleSecret([string]$Account) {
+    $path = Join-Path $repo ".data\local-credentials\$Account.txt"
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
+    foreach ($line in [IO.File]::ReadAllLines($path)) {
+        if ($line -match '^password=(.+)$') {
+            # Sin ConvertTo-SecureString: su módulo no carga si powershell.exe se lanza desde pwsh 7.
+            $secure = New-Object Security.SecureString
+            foreach ($character in $matches[1].ToCharArray()) { $secure.AppendChar($character) }
+            $secure.MakeReadOnly()
+            return $secure
+        }
+    }
+    throw "$Account.txt no tiene una línea password=."
+}
 $ownerSecret = $OwnerPassword
 $runtimeSecret = $RuntimePassword
+if ($null -eq $ownerSecret) { $ownerSecret = Read-LocalOracleSecret 'TT_OWNER' }
+if ($null -eq $runtimeSecret) { $runtimeSecret = Read-LocalOracleSecret 'TT_APP' }
 if ($null -eq $ownerSecret) { $ownerSecret = Read-Host 'Contrasena actual de TT_OWNER' -AsSecureString }
 if ($null -eq $runtimeSecret) { $runtimeSecret = Read-Host 'Contrasena actual de TT_APP' -AsSecureString }
 $saved = @{}

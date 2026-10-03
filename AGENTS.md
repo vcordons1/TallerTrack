@@ -50,10 +50,10 @@ Otros mecanismos de memoria o de instrucciones para agentes. No son fuentes (§2
 | Dónde | Qué es | Regla |
 |---|---|---|
 | Vault: nota `00-sistema/Guia de memoria` | Reglas de uso del vault | No repite reglas de este archivo; remite a él |
-| Servidor MCP `tallertrack-memory` | Instrucciones que el servidor da al agente al conectarse | Las mantiene el propietario; deben coincidir con la `Guia de memoria` |
+| Servidor MCP `tallertrack-memory` | Instrucciones que el servidor da al agente al conectarse: la sección «Protocolo para Claude» de la `Guia de memoria` (`OBSIDIAN_GUIDE_PATH` en `~/.claude.json`) | Se editan en esa nota, no en otro archivo; los cambios se aplican al reiniciar el cliente |
 | `.codex/task-handoff.template.md` (versionado) | Antigua plantilla de memoria temporal de Codex | Solo remite a §12 y §13; no define otro formato de handoff |
 | `.codex/config.toml` | Configuración de Codex (memorias desactivadas) | — |
-| `.data/claude-project-context.md` (ignorado por git) | Instantánea de contexto para planear, corte tras TT-027 | Desactualizada; no se usa como estado |
+| `.data/claude-project-context.md` (ignorado por git) | Desde TT-031, una línea que remite a `docs/project-state.md` | No se usa como estado. El proyecto de Claude donde se redactan los tickets recibe del propietario `project-state.md`, `AGENTS.md` y `lecciones.md` (§12, punto 10) |
 | `docs/tickets/plantilla.md` | Estructura de un ticket nuevo | Se copia al redactar cada ticket |
 
 Si aparece un mecanismo nuevo de memoria o de instrucciones para agentes, se añade a esta tabla.
@@ -81,9 +81,10 @@ Verificaciones de arranque (solo lectura):
 
 - el punto de partida que declara el ticket coincide con el repositorio y la base (migración, datos, usuarios, estados). Si no coincide, repórtalo en el plan antes de proponer nada;
 - no hay una API corriendo en segundo plano (puerto 3000). Si la hay, detenla;
-- línea base de grants de `TT_APP`.
+- línea base de grants de `TT_APP`;
+- no quedan esquemas de prueba `TT_TEST_%` en Oracle. Si hay alguno, repórtalo en el plan como sobrante (L24); no lo elimines sin aprobación.
 
-Las dos últimas se hacen con `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/api-port.ps1 -Grants` (añade `-Stop` para detener una API node en el puerto 3000). Imprime la migración vigente y la huella `TT_APP=sistema:SELECT:EXECUTE:DML:roles:PKG_ORDENES`.
+Las tres últimas se hacen con `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/api-port.ps1 -Grants` (añade `-Stop` para detener una API node en el puerto 3000). Imprime la migración vigente, la huella `TT_APP=sistema:SELECT:EXECUTE:DML:roles:PKG_ORDENES` y `TT_TEST=ninguno` o la lista de esquemas de prueba con su fecha de creación.
 
 El plan contiene:
 
@@ -184,7 +185,8 @@ Los problemas de entorno nuevos van a `docs/lecciones.md` y a la nota `Entorno l
 ## 9. Secretos
 
 - Las credenciales de los usuarios de prueba de la app están en `.data/local-credentials/<usuario>.txt` (ignorado por git). Léelas desde ahí **sin imprimirlas**: ni en comandos visibles, ni en logs, ni en salidas de herramientas, ni en documentos, ni en el vault.
-- Las contraseñas de `TT_OWNER` y `TT_APP` no están en `.data/`: las introduce el propietario cuando `npm.cmd run start:users:local` las pide. Nunca se pasan al agente por chat (L11).
+- Las contraseñas de `TT_OWNER` y `TT_APP` están en `.data/local-credentials/TT_OWNER.txt` y `TT_APP.txt` (desde TT-031) y `npm.cmd run start:users:local` las lee de ahí; si faltan, las pide sin eco. Guardarlas en `.data/` es una decisión consciente: el agente ya tiene sysdba por autenticación del sistema operativo, así que no amplía su acceso real y evita copiar contraseñas a mano. Se leen con las mismas reglas que las demás y nunca se pasan por chat (L11).
+- Al rotar una contraseña Oracle, el valor no va en la línea de comandos ni en un literal SQL que se pueda consultar después: se pasa por stdin sin BOM (L12) y se comprueba que no quedó en la auditoría (TT-031: Oracle no guarda el texto de `ALTER USER … IDENTIFIED BY`).
 - No pidas ni aceptes contraseñas por chat. Si alguien las pega en la conversación, repórtalo para rotarlas.
 - Para comprobar que ningún secreto de `.data/local-credentials/` quedó escrito, ejecuta `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/secret-scan.ps1`. Revisa `docs/`, el vault, los `*.log` y los archivos versionados del repo de código, e imprime solo `cuenta → archivo: N`. No conoce los secretos que no están en `.data/`.
 - Los enlaces y tokens QR también son secretos: no se imprimen.
@@ -227,7 +229,7 @@ Al terminar, responde con este formato y detente:
 7. **Base de datos**: migración vigente; grants de `TT_APP` antes y después.
 8. **Archivos**: lista separada para el repo de código y para el repo `docs/`.
 9. **Lectura**: notas del vault y documentos leídos, y los obligatorios que no se leyeron (con el motivo).
-10. **Memoria actualizada**: `project-state.md`, notas del vault y entradas de `docs/lecciones.md` añadidas.
+10. **Memoria actualizada**: `project-state.md`, notas del vault y entradas de `docs/lecciones.md` añadidas. Si cambiaron `project-state.md`, `AGENTS.md` o `lecciones.md`, lista cuáles debe subir el propietario al proyecto de Claude (L25).
 11. **Errores y sorpresas**: qué salió distinto de lo previsto, incluidos errores del propio ticket.
 12. **Secretos**: si alguno apareció en una salida (cuenta afectada, sin el valor).
 13. **Limitaciones y gates abiertos.**
