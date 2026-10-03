@@ -290,6 +290,7 @@ test("O02 accepts the appointment only as a pair and keeps undefined rules close
   const onlyVersion = await post({ ...body, citaVersionEsperada: "2" });
   assert.equal(onlyVersion.status, 400);
   assert.equal((await post({ ...body, citaId: "8001", citaVersionEsperada: 2 })).status, 400);
+  // L03: decisión temporal mantenida en TT-027 (B18 y la entrada tardía siguen sin definir); la levantaría el ticket que defina B18/ingresadoEn.
   for (const closed of [{ excepcionId: "1" }, { ingresadoEn: "2026-10-01T10:00:00Z" }, { motivoRegistroTardio: "Tarde" }]) {
     assert.equal((await post({ ...body, ...closed })).status, 400);
   }

@@ -272,6 +272,8 @@ test("technical detail shows no commercial data and no coordination actions", as
   assert.ok(backendCalls.calls.some(({ url }) => url === "/interno/ordenes/21?vista=TECNICA"));
   assert.ok(text.includes("VISTA TÉCNICA"));
   assert.ok(text.includes("Mecánico TT028"));
+  // L03: ocultar «Cliente contractual» y «Saldo» es contrato (proyección TECNICA de O03). Ocultar «Asignar mecánico»/«Retirar a»
+  // es decisión temporal de TT-028 (O06/O07 admiten a un M ya participante); la levantaría un ticket de coordinación técnica por M.
   for (const hidden of ["Cliente contractual", "Asignar mecánico", "Retirar a", "Confirmar diagnóstico", "Saldo"]) {
     assert.equal(text.includes(hidden), false, hidden);
   }
@@ -338,9 +340,11 @@ test("mechanic proposes, starts with a written reason and confirms the free diag
   await act(async () => input(tree, "Descripción del diagnóstico").props.onChangeText("Revisar ruido"));
   await press(tree, "Proponer diagnóstico gratuito");
   const proposal = backendCalls.calls.find(({ url, options }) => url.endsWith("/trabajos") && options.method === "POST");
+  // L03: decisión temporal de TT-024/TT-029: tipoServicio fijo en la UI (L08, selector P1 diferido); la levantaría el ticket del selector P1.
   assert.deepEqual(plain(proposal.options.body), { tipo: "DIAGNOSTICO", tipoServicio: "DIAGNOSTICO",
     descripcion: "Revisar ruido", diagnosticoGratuito: true });
   assert.ok(content(tree).includes("Propuesto · Gratuito"));
+  // L03: decisión temporal de TT-029 (el contrato no limita a un trabajo activo); la levantaría el ticket de diagnóstico cobrable o varios trabajos.
   assert.equal(pressable(tree, "Proponer diagnóstico gratuito"), undefined, "one active free diagnosis at a time");
   assert.equal(pressable(tree, "Iniciar diagnóstico").props.disabled, true, "a reason is required");
   await act(async () => input(tree, "Motivo del inicio").props.onChangeText("Cliente autorizó revisar"));
@@ -359,6 +363,7 @@ test("mechanic proposes, starts with a written reason and confirms the free diag
   assert.equal(new Set(keys).size, 3, "each intention has its own key");
   const text = content(tree);
   assert.ok(text.includes("Hay que cambiar un rodamiento") && text.includes("Rodamiento gastado"));
+  // L03: decisión temporal de TT-029 (D02 admite revisiones); la levantaría el ticket de revisiones del informe.
   assert.equal(pressable(tree, "Confirmar diagnóstico"), undefined, "the confirmed report hides the form");
   await act(async () => tree.unmount());
 });
@@ -402,6 +407,9 @@ test("receptionist sees EN_DIAGNOSTICO and the report summary without technical 
   const text = content(tree);
   assert.ok(text.includes("En diagnóstico"));
   assert.ok(text.includes("Informes diagnósticos") && text.includes("Cambiar rodamiento"));
+  // L03: sin «Proponer»/«Iniciar diagnóstico» es contrato (T02/T04/D02 solo M). Sin la sección de trabajos y sin llamar a T01
+  // es decisión temporal de TT-029 (T01 admite A/R/M); la levantaría un ticket que muestre trabajos a R. Sin «Detalle técnico»
+  // sigue la proyección D01 actual (detalleTecnico=null para R), discrepancia con el contrato registrada en project-state; la levantaría el ticket de D01.
   for (const hidden of ["Trabajo diagnóstico gratuito", "Proponer diagnóstico", "Iniciar diagnóstico", "Detalle técnico"]) {
     assert.equal(text.includes(hidden), false, hidden);
   }

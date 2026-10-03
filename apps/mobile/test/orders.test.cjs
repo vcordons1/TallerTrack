@@ -22,6 +22,8 @@ const QUANTITY_PATTERN = /^\d{1,9}\.\d{3}$/;
 const KM_PATTERN = /^\d{1,9}\.\d$/;
 const WORK_STATES = new Set(["PROPUESTO", "EN_EJECUCION", "COMPLETADO", "DETENIDO", "DESCARTADO"]);
 
+// L03: decisión temporal: los datos demo de órdenes siguen para INVENTARIO aislado (también las pruebas «the demo covers…» y
+// «demo repository…»); la levantaría el ticket que dé a INVENTARIO su espacio real.
 test("demo orders preserve O01/O03 reception projection primitives", () => {
   assert.equal(ORDER_FIXTURES.length >= 4, true);
 

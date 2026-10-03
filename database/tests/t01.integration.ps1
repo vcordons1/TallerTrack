@@ -224,6 +224,7 @@ select 'EXECUTES='||count(*) from dba_tab_privs where grantee='$runtime' and own
 select 'DML='||count(*) from dba_tab_privs where grantee='$runtime' and owner='$schema' and privilege in ('INSERT','UPDATE','DELETE');
 "@
     Assert-Output 'runtime readiness reads' $grants 'SELECTS=3'
+    # L03: guardia intencional; actualizar al anadir una fachada.
     Assert-Output 'runtime facade executes' $grants 'EXECUTES=9'
     Assert-Output 'runtime direct DML grants' $grants 'DML=0'
     Assert-Output 'runtime hash read denied' (Invoke-RuntimeSql "select sha256 from $schema.archivo_privado;" $false) 'ORA-00942|ORA-01031'
@@ -280,6 +281,7 @@ begin $schema.pkg_ordenes.abrir_orden_comercial('actor:100/T01','replay',$hRepla
     Assert-Output 'replay rollback' (Invoke-OwnerSql "select 'REPLAY_ROWS='||(select count(*) from orden_trabajo where id_vehiculo=1004)||':'||(select count(*) from comando where clave_idempotencia='replay') from dual;") 'REPLAY_ROWS=0:0'
 
     foreach ($case in @(
+        # L03: decision temporal (RN-029 sin I06): DEUDA_NO_VERIFICABLE cierra por precaucion; la levantaria el ticket de I06.
         @('delivered debt guard',1001,1101,201,$hDebt,'debt','ORA-20031.*DEUDA_NO_VERIFICABLE'),
         @('delivered without repair debt guard',1002,1102,202,$hDebtNoRepair,'debt-no-repair','ORA-20031.*DEUDA_NO_VERIFICABLE'),
         @('changed property',1003,1103,203,$hProperty,'property','ORA-20021.*PROPIEDAD_CAMBIADA'),

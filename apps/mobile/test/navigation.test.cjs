@@ -71,6 +71,7 @@ test("multiple internal roles compose their destinations", () => {
   ]);
 });
 
+// L03: decisión temporal de TT-028; la levantaría el primer ticket que dé a MECANICO otro espacio de trabajo.
 test("a mechanic only receives home and its assigned orders (TT-028)", () => {
   const destinations = getInternalDestinations([ROLES.MECANICO]).map(
     ({ key }) => key,

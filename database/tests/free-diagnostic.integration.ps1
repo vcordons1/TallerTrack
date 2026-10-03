@@ -155,6 +155,7 @@ commit;
     & $appBootstrap -RuntimeUser $runtime -OwnerSchema $owner -RuntimePassword (As-Secure $runtimePassword) | Out-Null
     $runtimeCreated = $true
     $grants = Sys-Sql "select 'EXECUTES='||count(*) from dba_tab_privs where grantee='$runtime' and owner='$owner' and privilege='EXECUTE';"
+    # L03: guardia intencional; actualizar al anadir una fachada.
     if ($grants -notmatch 'EXECUTES=9') { throw "Runtime facade grants are incomplete: $grants" }
     $privilegeQuery = @"
 select 'PRIVS='||(select count(*) from dba_sys_privs where grantee='$runtime')

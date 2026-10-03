@@ -45,6 +45,19 @@ Lee solo las secciones necesarias para la tarea. No cargues la documentación co
 
 `project-state.md` es compacto y actual, no cronológico. La historia va al vault.
 
+Otros mecanismos de memoria o de instrucciones para agentes. No son fuentes (§2); si contradicen a este archivo, gana este archivo y se corrigen:
+
+| Dónde | Qué es | Regla |
+|---|---|---|
+| Vault: nota `00-sistema/Guia de memoria` | Reglas de uso del vault | No repite reglas de este archivo; remite a él |
+| Servidor MCP `tallertrack-memory` | Instrucciones que el servidor da al agente al conectarse | Las mantiene el propietario; deben coincidir con la `Guia de memoria` |
+| `.codex/task-handoff.template.md` (versionado) | Antigua plantilla de memoria temporal de Codex | Solo remite a §12 y §13; no define otro formato de handoff |
+| `.codex/config.toml` | Configuración de Codex (memorias desactivadas) | — |
+| `.data/claude-project-context.md` (ignorado por git) | Instantánea de contexto para planear, corte tras TT-027 | Desactualizada; no se usa como estado |
+| `docs/tickets/plantilla.md` | Estructura de un ticket nuevo | Se copia al redactar cada ticket |
+
+Si aparece un mecanismo nuevo de memoria o de instrucciones para agentes, se añade a esta tabla.
+
 Una semántica de producto o de negocio nunca se marca como aceptada sin acuerdo explícito del dueño del proyecto.
 
 ## 4. Protocolo de ticket
@@ -58,7 +71,7 @@ Lectura mínima obligatoria, en este orden:
 1. este `AGENTS.md` y cualquier `AGENTS.md` de subcarpeta aplicable;
 2. `docs/project-state.md` completo;
 3. `docs/lecciones.md` completo;
-4. en el vault: `Inicio`, `Estado actual` y la nota de cierre del ticket anterior;
+4. en el vault: `00 - TallerTrack - Inicio`, `Estado actual` y la nota de cierre del ticket anterior;
 5. las secciones de las fuentes canónicas que el ticket cite;
 6. el código y las pruebas que el ticket vaya a tocar.
 
@@ -69,6 +82,8 @@ Verificaciones de arranque (solo lectura):
 - el punto de partida que declara el ticket coincide con el repositorio y la base (migración, datos, usuarios, estados). Si no coincide, repórtalo en el plan antes de proponer nada;
 - no hay una API corriendo en segundo plano (puerto 3000). Si la hay, detenla;
 - línea base de grants de `TT_APP`.
+
+Las dos últimas se hacen con `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/api-port.ps1 -Grants` (añade `-Stop` para detener una API node en el puerto 3000). Imprime la migración vigente y la huella `TT_APP=sistema:SELECT:EXECUTE:DML:roles:PKG_ORDENES`.
 
 El plan contiene:
 
@@ -95,11 +110,13 @@ Ver §5. Cuando la aceptación física pase, **el código se congela**: después
 2. actualizar el vault: `Estado actual`, nota de cierre del ticket y una nota por cada decisión o aprendizaje que deba sobrevivir;
 3. añadir las lecciones nuevas a `docs/lecciones.md` (§10);
 4. detener la API y cualquier proceso que hayas lanzado;
-5. entregar el REVIEW_HANDOFF (§11) y detenerte para la revisión en Git.
+5. entregar el REVIEW_HANDOFF (§12) y detenerte para la revisión en Git.
 
 ## 5. Definición de terminado
 
-Un ticket está terminado solo si se cumple todo esto:
+La verificación en el teléfono es obligatoria si el ticket cambia algo que un usuario puede ver o hacer en la app, incluido un cambio solo de API que la app use. Los tickets de proceso definen su propia verificación en sus criterios de aceptación.
+
+Un ticket que cambia la app está terminado solo si se cumple todo esto:
 
 - la pregunta principal de aceptación del ticket se responde **sí**, demostrado en el teléfono (Samsung SM-G990E) con datos creados desde la app;
 - cada pantalla nueva o modificada tiene prueba de render **y** se vio funcionando en el teléfono. Pruebas en verde sin verificación física no bastan;
@@ -157,7 +174,7 @@ Base de datos:
 
 ## 8. Entorno local (Windows)
 
-- `test:db:integration` se ejecuta desde **Git Bash**. Desde pwsh falla en i02 por el BOM.
+- Las suites Oracle se ejecutan desde **Git Bash**, en la raíz del repo, con `npm.cmd run test:db:integration` (las nueve). No hace falta ninguna variable de encoding (verificado en TT-030). Desde pwsh falla en i02 por el BOM (L12).
 - Una suite que no se ejecutó con la configuración real (por ejemplo, `test:api:oracle` sin el TT_APP real) **no cuenta** como prueba pasada. Se reporta como no ejecutada.
 - Al empezar, comprueba si hay una API en el puerto 3000 y detenla. Al terminar, detén la tuya y di en el handoff que el puerto quedó libre.
 - Automatización del teléfono con `adb`: antes de teclear, verifica que el foco está en el campo correcto.
@@ -166,8 +183,10 @@ Los problemas de entorno nuevos van a `docs/lecciones.md` y a la nota `Entorno l
 
 ## 9. Secretos
 
-- Las credenciales locales están en `.data/local-credentials/<usuario>.txt` (ignorado por git). Léelas desde ahí **sin imprimirlas**: ni en comandos visibles, ni en logs, ni en salidas de herramientas, ni en documentos, ni en el vault.
+- Las credenciales de los usuarios de prueba de la app están en `.data/local-credentials/<usuario>.txt` (ignorado por git). Léelas desde ahí **sin imprimirlas**: ni en comandos visibles, ni en logs, ni en salidas de herramientas, ni en documentos, ni en el vault.
+- Las contraseñas de `TT_OWNER` y `TT_APP` no están en `.data/`: las introduce el propietario cuando `npm.cmd run start:users:local` las pide. Nunca se pasan al agente por chat (L11).
 - No pidas ni aceptes contraseñas por chat. Si alguien las pega en la conversación, repórtalo para rotarlas.
+- Para comprobar que ningún secreto de `.data/local-credentials/` quedó escrito, ejecuta `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/secret-scan.ps1`. Revisa `docs/`, el vault, los `*.log` y los archivos versionados del repo de código, e imprime solo `cuenta → archivo: N`. No conoce los secretos que no están en `.data/`.
 - Los enlaces y tokens QR también son secretos: no se imprimen.
 - Si un secreto aparece en una salida, repórtalo en el handoff con la cuenta afectada, sin repetir el valor.
 

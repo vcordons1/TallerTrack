@@ -109,6 +109,8 @@ test("T02/T04/D02 accept only the free technical variant and no actor IDs", asyn
   assert.equal((await value.request(workPath, "POST", { tipo: "DIAGNOSTICO",
     tipoServicio: "DIAGNOSTICO", descripcion: "Revisar falla", diagnosticoGratuito: true })).status, 201);
   assert.equal(value.calls.at(-1)[1].free, 1);
+  // L03: decisión temporal de TT-024: solo diagnóstico gratuito explícito (REPARACION o no gratuito → 422) y T04 sin itemId;
+  // la levantaría el ticket de presupuesto/autorización (diagnóstico cobrable y reparación).
   for (const payload of [
     { tipo: "DIAGNOSTICO", tipoServicio: "DIAGNOSTICO", descripcion: "X", diagnosticoGratuito: false },
     { tipo: "REPARACION", tipoServicio: "DIAGNOSTICO", descripcion: "X", diagnosticoGratuito: true },

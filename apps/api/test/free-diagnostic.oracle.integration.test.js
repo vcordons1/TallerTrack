@@ -219,6 +219,7 @@ test("HTTP and TT_APP perform the free diagnosis path against independent Oracle
   const reports = (await request("mechanic", diagnoses)).payload.data;
   assert.equal(reports[0].revisionAnteriorId, reports[1].id);
   assert.equal(reports[0].detalleTecnico, "Sensor revisado nuevamente");
+  // L03: decisión temporal de TT-024/V023 y discrepancia con el contrato D01 (R solo debe perder notas privadas); la levantaría el ticket de D01.
   assert.equal((await request("reception", diagnoses)).payload.data[0].detalleTecnico, null);
 
   // TT-029: TX T02 is atomic — a failure while writing the report leaves no command and no revision.

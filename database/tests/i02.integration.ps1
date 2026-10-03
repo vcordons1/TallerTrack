@@ -225,6 +225,7 @@ select 'QUOTA='||count(*) from dba_ts_quotas where username='$runtime' and max_b
 "@
     Assert-Output 'runtime system privilege' $runtimeGrants 'SYS=CREATE SESSION'
     Assert-Output 'runtime SELECT grants' $runtimeGrants 'SELECTS=3'
+    # L03: guardia intencional; actualizar al anadir una fachada.
     Assert-Output 'runtime package grant' $runtimeGrants 'EXECUTES=9'
     Assert-Output 'runtime direct DML' $runtimeGrants 'DML=0'
     Assert-Output 'runtime quota' $runtimeGrants 'QUOTA=0'
